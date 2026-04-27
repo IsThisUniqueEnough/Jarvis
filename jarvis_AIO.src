@@ -1,0 +1,3657 @@
+Jarvis = {}
+
+Jarvis.HACKSHOP ="132.45.158.54" // Enter your personal hackshop here before compiling
+Jarvis.MASTER_KEY = "trinity_was_here_1999" // Encryption key for databases - change this!
+
+
+
+Jarvis.inited = false
+Jarvis.clone = false
+Jarvis.RSHELLPROC = "Termina1"
+Jarvis.bounceChain = []
+Jarvis.libStack = []
+
+JarvisCrypt = {}
+JarvisCrypt.toHex = function(num)
+    hexChars = "0123456789ABCDEF"
+    return hexChars[floor(num / 16)] + hexChars[num % 16]
+end function
+
+JarvisCrypt.fromHex = function(hexStr)
+    hexChars = "0123456789ABCDEF"
+    val1 = hexChars.indexOf(hexStr[0])
+    val2 = hexChars.indexOf(hexStr[1])
+    return (val1 * 16) + val2
+end function
+
+JarvisCrypt.encrypt = function(plainText, key)
+    if plainText.len == 0 then return ""
+    if key.len == 0 then return plainText
+    
+    salt = floor(rnd * 256)
+    cipherHex = JarvisCrypt.toHex(salt)
+    prevCipherCode = salt
+    
+    for i in range(0, plainText.len - 1)
+        pCode = plainText[i].code
+        kCode = key[i % key.len].code
+        shifted = (pCode + kCode + prevCipherCode) % 256
+        cipherHex = cipherHex + JarvisCrypt.toHex(shifted)
+        prevCipherCode = shifted
+    end for
+    return cipherHex
+end function
+
+JarvisCrypt.decrypt = function(cipherHex, key)
+    if cipherHex.len <= 2 then return "" 
+    if key.len == 0 or cipherHex.len % 2 != 0 then return ""
+    
+    prevCipherCode = JarvisCrypt.fromHex(cipherHex[0:2])
+    plainText = ""
+    i = 2 
+    charIndex = 0 
+    
+    while i < cipherHex.len
+        hexByte = cipherHex[i] + cipherHex[i+1]
+        cCode = JarvisCrypt.fromHex(hexByte)
+        kCode = key[charIndex % key.len].code
+        shifted = (cCode - kCode - prevCipherCode) % 256
+        while shifted < 0 
+            shifted = shifted + 256
+        end while
+        plainText = plainText + char(shifted)
+        prevCipherCode = cCode
+        i = i + 2
+        charIndex = charIndex + 1
+    end while
+    return plainText
+end function
+
+MarkovCrack = {}
+MarkovCrack.chains = {}
+MarkovCrack.attempts = 0
+MarkovCrack.order = 3
+MarkovCrack.min_length = 3
+MarkovCrack.max_length = 11
+MarkovCrack.trigram_frequencies = null
+MarkovCrack.user = "root"
+MarkovCrack.ip = null
+MarkovCrack.port = null
+
+MarkovCrack.keywords = ["password", "123456", "12345678", "1234", "qwerty", "12345", "dragon", "baseball", "football", "letmein", "monkey", "696969", "abc123", "mustang", "michael", "shadow", "master", "jennifer", "111111", "2000", "jordan", "superman", "harley", "1234567", "hunter", "trustno1", "ranger", "buster", "thomas", "tigger", "robert", "soccer", "batman", "test", "pass", "hockey", "george", "charlie", "andrew", "michelle", "love", "sunshine", "jessica", "6969", "pepper", "daniel", "access", "123456789", "654321", "joshua", "maggie", "starwars", "silver", "william", "dallas", "yankees", "123123", "ashley", "666666", "hello", "amanda", "orange", "biteme", "freedom", "computer", "sexy", "thunder", "nicole", "ginger", "heather", "hammer", "summer", "corvette", "taylor", "austin", "1111", "merlin", "matthew", "121212", "golfer", "cheese", "princess", "martin", "chelsea", "patrick", "richard", "diamond", "yellow", "bigdog", "secret", "asdfgh", "sparky", "cowboy", "camaro", "anthony", "matrix", "falcon", "iloveyou", "bailey", "guitar", "jackson", "purple", "scooter", "phoenix", "aaaaaa", "morgan", "tigers", "porsche", "mickey", "maverick", "cookie", "nascar", "peanut", "justin", "131313", "money", "horny", "samantha", "panties", "steelers", "joseph", "snoopy", "boomer", "whatever", "iceman", "smokey", "gateway", "dakota", "cowboys", "eagles", "chicken", "black", "zxcvbn", "please", "andrea", "ferrari", "knight", "hardcore", "melissa", "compaq", "coffee", "booboo", "johnny", "bulldog", "xxxxxx", "welcome", "james", "player", "ncc1701", "wizard", "scooby", "charles", "junior", "internet", "mike", "brandy", "tennis", "banana", "monster", "spider", "lakers", "miller", "rabbit", "enter", "mercedes", "brandon", "steven", "fender", "john", "yamaha", "diablo", "chris", "boston", "tiger", "marine", "chicago", "rangers", "gandalf", "winter", "bigtits", "barney", "edward", "raiders", "porn", "badboy", "blowme", "spanky", "bigdaddy", "johnson", "chester", "london", "midnight", "blue", "fishing", "000000", "hannah", "slayer", "11111111", "rachel", "sexsex", "redsox", "thx1138", "asdf", "marlboro", "panther", "zxcvbnm", "arsenal", "oliver", "qazwsx", "mother", "victoria", "7777777", "jasper", "angel", "david", "winner", "crystal", "golden", "butthead", "viking", "jack", "iwantu", "shannon", "murphy", "angels", "prince", "cameron", "girls", "madison", "wilson", "carlos", "hooters", "willie", "startrek", "captain", "maddog", "jasmine", "butter", "booger", "angela", "golf", "lauren", "rocket", "tiffany", "theman", "dennis", "liverpoo", "flower", "forever", "green", "jackie", "muffin", "turtle", "sophie", "danielle", "redskins", "toyota", "jason", "sierra", "winston", "debbie", "giants", "packers", "newyork", "jeremy", "casper", "bubba", "112233", "sandra", "lovers", "mountain", "united", "cooper", "driver", "tucker", "helpme", "pookie", "lucky", "maxwell", "8675309", "bear", "suckit", "gators", "5150", "222222", "shithead", "jaguar", "monica", "fred", "happy", "hotdog", "tits", "gemini", "lover", "xxxxxxxx", "777777", "canada", "nathan", "victor", "florida", "88888888", "nicholas", "rosebud", "metallic", "doctor", "trouble", "success", "stupid", "tomcat", "warrior", "peaches", "apples", "fish", "qwertyui", "magic", "buddy", "dolphins", "rainbow", "gunner", "987654", "freddy", "alexis", "braves", "2112", "1212", "xavier", "dolphin", "testing", "bond007", "member", "calvin", "voodoo", "7777", "samson", "alex", "apollo", "fire", "tester", "walter", "beavis", "voyager", "peter", "porno", "bonnie", "rush2112", "beer", "apple", "scorpio", "jonathan", "skippy", "sydney", "scott", "red123", "power", "gordon", "travis", "beaver", "star", "flyers", "232323", "zzzzzz", "steve", "rebecca", "scorpion", "doggie", "legend", "ou812", "yankee", "blazer", "bill", "runner", "birdie", "555555", "parker", "topgun", "asdfasdf", "heaven", "viper", "animal", "2222", "bigboy", "4444", "arthur", "baby", "private", "godzilla", "donald", "williams", "lifehack", "phantom", "dave", "rock", "august", "sammy", "cool", "brian", "platinum", "jake", "bronco", "paul", "mark", "frank", "heka6w2", "copper", "billy", "garfield", "willow", "cunt", "little", "carter", "slut", "albert", "69696969", "kitten", "super", "jordan23", "eagle1", "shelby", "america", "11111", "jessie", "house", "free", "123321", "chevy", "bullshit", "white", "broncos", "horney", "surfer", "nissan", "999999", "saturn", "airborne", "elephant", "marvin", "shit", "action", "adidas", "qwert", "kevin", "1313", "explorer", "walker", "police", "christin", "december", "benjamin", "wolf", "sweet", "therock", "king", "online", "brooklyn", "teresa", "cricket", "sharon", "dexter", "racing", "penis", "gregory", "0000", "teens", "redwings", "dreams", "michigan", "hentai", "magnum", "87654321", "nothing", "donkey", "trinity", "digital", "333333", "stella", "cartman", "guinness", "123abc", "speedy", "buffalo", "kitty", "pimpin", "eagle", "einstein", "kelly", "nelson", "nirvana", "vampire", "xxxx", "playboy", "louise", "pumpkin", "snowball", "test123", "girl", "sucker", "mexico", "beatles", "fantasy", "ford", "gibson", "celtic", "marcus", "cherry", "cassie", "888888", "natasha", "sniper", "chance", "genesis", "hotrod", "reddog", "alexande", "college", "jester", "passw0rd", "smith", "lasvegas", "carmen", "slipknot", "3333", "death", "kimberly", "1q2w3e", "eclipse", "1q2w3e4r", "stanley", "samuel", "drummer", "homer", "montana", "music", "aaaa", "spencer", "jimmy", "carolina", "colorado", "creative", "hello1", "rocky", "goober", "friday", "bollocks", "scotty", "abcdef", "bubbles", "hawaii", "fluffy", "mine", "stephen", "horses", "thumper", "5555", "darkness", "asdfghjk", "pamela", "boobies", "buddha", "vanessa", "sandman", "naughty", "douglas", "honda", "matt", "azerty", "6666", "shorty", "money1", "beach", "loveme", "4321", "simple", "poohbear", "444444", "badass", "destiny", "sarah", "denise", "vikings", "lizard", "melanie", "assman", "sabrina", "nintendo", "water", "good", "howard", "time", "123qwe", "november", "xxxxx", "october", "leather", "bastard", "young", "101010", "extreme", "hard", "password1", "vincent", "lacrosse", "hotmail", "spooky", "amateur", "alaska", "badger", "paradise", "maryjane", "poop", "crazy", "mozart", "video", "russell", "vagina", "spitfire", "anderson", "norman", "eric", "cherokee", "cougar", "barbara", "long", "420420", "family", "horse", "enigma", "allison", "raider", "brazil", "blonde", "jones", "55555", "dude", "drowssap", "jeff", "school", "marshall", "lovely", "1qaz2wsx", "jeffrey", "caroline", "franklin", "booty", "molly", "snickers", "leslie", "nipples", "courtney", "diesel", "rocks", "eminem", "westside", "suzuki", "daddy", "passion", "hummer", "ladies", "zachary", "frankie", "elvis", "reggie", "alpha", "suckme", "simpson", "patricia", "147147", "pirate", "tommy", "semperfi", "jupiter", "redrum", "freeuser", "wanker", "stinky", "ducati", "paris", "natalie", "babygirl", "bishop", "windows", "spirit", "pantera", "monday", "patches", "brutus", "houston", "smooth", "penguin", "marley", "forest", "cream", "212121", "flash", "maximus", "nipple", "bobby", "bradley", "vision", "pokemon", "champion", "fireman", "indian", "softball", "picard", "system", "clinton", "cobra", "enjoy", "lucky1", "claire", "claudia", "boogie", "timothy", "marines", "security", "dirty", "admin", "wildcats", "pimp", "dancer", "hardon", "veronica", "abcd1234", "abcdefg", "ironman", "wolverin", "remember", "great", "freepass", "bigred", "squirt", "justice", "francis", "hobbes", "kermit", "pearljam", "mercury", "domino", "9999", "denver", "brooke", "rascal", "hitman", "mistress", "simon", "tony", "bbbbbb", "friend", "peekaboo", "naked", "budlight", "electric", "sluts", "stargate", "saints", "bondage", "brittany", "bigman", "zombie", "swimming", "duke", "qwerty1", "babes", "scotland", "disney", "rooster", "brenda", "mookie", "swordfis", "candy", "duncan", "olivia", "hunting", "blink182", "alicia", "8888", "samsung", "bubba1", "whore", "virginia", "general", "passport", "aaaaaaaa", "erotic", "liberty", "arizona", "jesus", "abcd", "newport", "skipper", "rolltide", "balls", "happy1", "galore", "christ", "weasel", "242424", "wombat", "digger", "classic", "bulldogs", "poopoo", "accord", "popcorn", "turkey", "jenny", "amber", "bunny", "mouse", "007007", "titanic", "liverpool", "dreamer", "everton", "friends", "chevelle", "carrie", "gabriel", "psycho", "nemesis", "burton", "pontiac", "connor", "eatme", "lickme", "roland", "mitchell", "ireland", "lincoln", "arnold", "spiderma", "patriots", "goblue", "devils", "eugene", "empire", "asdfg", "cardinal", "brown", "shaggy", "froggy", "qwer", "kawasaki", "kodiak", "people", "phpbb", "light", "54321", "kramer", "chopper", "hooker", "honey", "whynot", "lisa", "baxter", "adam", "snake", "ncc1701d", "qqqqqq", "airplane", "britney", "avalon", "sandy", "sugar", "sublime", "stewart", "wildcat", "raven", "scarface", "elizabet", "123654", "trucks", "wolfpack", "lawrence", "raymond", "american", "alyssa", "bambam", "movie", "woody", "shaved", "snowman", "tiger1", "chicks", "raptor", "1969", "stingray", "shooter", "france", "stars", "madmax", "kristen", "sports", "jerry", "789456", "garcia", "simpsons", "lights", "ryan", "looking", "chronic", "alison", "hahaha", "packard", "hendrix", "perfect", "service", "spring", "srinivas", "spike", "katie", "252525", "oscar", "brother", "bigmac", "suck", "single", "cannon", "georgia", "popeye", "tattoo", "texas", "party", "bullet", "taurus", "sailor", "wolves", "panthers", "japan", "strike", "flowers", "pussycat", "chris1", "loverboy", "berlin", "sticky", "marina", "tarheels", "fisher", "russia", "connie", "wolfgang", "testtest", "mature", "bass", "catch22", "juice", "michael1", "159753", "women", "alpha1", "trooper", "hawkeye", "head", "freaky", "dodgers", "pakistan", "machine", "pyramid", "vegeta", "katana", "moose", "tinker", "coyote", "infinity", "inside", "letmein1", "bang", "control", "hercules", "morris", "james1", "tickle", "outlaw", "browns", "billybob", "pickle", "test1", "michele", "antonio", "sucks", "pavilion", "changeme", "caesar", "prelude", "tanner", "adrian", "darkside", "bowling", "wutang", "sunset", "robbie", "alabama", "danger", "zeppelin", "juan", "rusty", "pppppp", "nick", "2001", "ping", "darkstar", "madonna", "qwe123", "bigone", "casino", "cheryl", "charlie1", "mmmmmm", "integra", "wrangler", "apache", "tweety", "qwerty12", "bobafett", "simone", "none", "business", "sterling", "trevor", "transam", "dustin", "harvey", "england", "2323", "seattle", "ssssss", "rose", "harry", "openup", "pandora", "trucker", "wallace", "indigo", "storm", "malibu", "weed", "review", "babydoll", "doggy", "dilbert", "pegasus", "joker", "catfish", "flipper", "valerie", "herman", "detroit", "kenneth", "cheyenne", "bruins", "stacey", "smoke", "joey", "seven", "marino", "fetish", "xfiles", "wonder", "stinger", "pizza", "babe", "pretty", "stealth", "manutd", "gracie", "gundam", "cessna", "longhorn", "presario", "mnbvcxz", "wicked", "mustang1", "victory", "21122112", "shelly", "awesome", "athena", "q1w2e3r4", "help", "holiday", "knicks", "street", "redneck", "12341234", "casey", "gizmo", "scully", "dragon1", "devildog", "triumph", "eddie", "bluebird", "shotgun", "peewee", "ronnie", "angel1", "daisy", "special", "metallica", "madman", "country", "impala", "lennon", "roscoe", "omega", "access14", "enterpri", "miranda", "search", "smitty", "blizzard", "unicorn", "tight", "rick", "ronald", "asdf1234", "harrison", "trigger", "truck", "danny", "home", "winnie", "beauty", "thailand", "1234567890", "cadillac", "castle", "tyler", "bobcat", "buddy1", "sunny", "stones", "asian", "freddie", "chuck", "butt", "loveyou", "norton", "hellfire", "indiana", "short", "panzer", "lonewolf", "colors", "blaster", "12121212", "fireball", "logan", "precious", "aaron", "elaine", "jungle", "atlanta", "gold", "corona", "curtis", "nikki", "polaris", "timber", "theone", "baller", "chipper", "orlando", "island", "skyline", "dragons", "dogs", "benson", "licker", "goldie", "engineer", "kong", "pencil", "basketba", "open", "hornet", "world", "linda", "barbie", "chan", "farmer", "valentin", "indians", "larry", "redman", "foobar", "travel", "morpheus", "bernie", "target", "141414", "hotstuff", "photos", "laura", "savage", "holly", "rocky1", "dollar", "turbo", "design", "newton", "hottie", "moon", "202020", "blondes", "4128", "lestat", "avatar", "future", "goforit", "random", "abgrtyu", "jjjjjj", "q1w2e3", "smiley", "goldberg", "express", "zipper", "wrinkle1", "stone", "andy", "babylon", "dong", "powers", "consumer", "dudley", "monkey1", "serenity", "samurai", "99999999", "skeeter", "lindsay", "joejoe", "master1", "aaaaa", "chocolat", "christia", "birthday", "stephani", "tang", "1234qwer", "alfred", "ball", "98765432", "maria", "sexual", "maxima", "77777777", "sampson", "buckeye", "highland", "kristin", "seminole", "reaper", "bassman", "nugget", "lucifer", "airforce", "nasty", "watson", "warlock", "2121", "philip", "always", "dodge", "chrissy", "burger", "bird", "snatch", "missy", "pink", "gang", "maddie", "holmes", "huskers", "piglet", "photo", "joanne", "hamilton", "dodger", "paladin", "christy", "chubby", "buckeyes", "hamlet", "abcdefgh", "bigfoot", "sunday", "manson", "goldfish", "garden", "deftones", "icecream", "blondie", "spartan", "julie", "harold", "charger", "brandi", "stormy", "sherry", "pleasure", "juventus", "rodney", "galaxy", "holland", "escort", "zxcvb", "planet", "jerome", "wesley", "blues", "song", "peace", "david1", "ncc1701e", "1966", "51505150", "cavalier", "gambit", "karen", "sidney", "ripper", "oicu812", "jamie", "sister", "marie", "martha", "nylons", "aardvark", "nadine", "minnie", "whiskey", "bing", "plastic", "anal", "babylon5", "chang", "savannah", "loser", "racecar", "insane", "yankees1", "mememe", "hansolo", "chiefs", "fredfred", "freak", "frog", "salmon", "concrete", "yvonne", "zxcv", "shamrock", "atlantis", "warren", "wordpass", "julian", "mariah", "rommel", "1010", "harris", "predator", "sylvia", "massive", "cats", "sammy1", "mister", "stud", "marathon", "rubber", "ding", "trunks", "desire", "montreal", "justme", "faster", "kathleen", "irish", "1999", "bertha", "jessica1", "alpine", "sammie", "diamonds", "tristan", "00000", "swinger", "shan", "stallion", "pitbull", "letmein2", "roberto", "ready", "april", "palmer", "ming", "shadow1", "audrey", "chong", "clitoris", "wang", "shirley", "jackoff", "bluesky", "sundance", "renegade", "hollywoo", "151515", "bernard", "wolfman", "soldier", "picture", "pierre", "ling", "goddess", "manager", "nikita", "sweety", "titans", "hang", "fang", "ficken", "niners", "bottom", "bubble", "hello123", "ibanez", "webster", "sweetpea", "stocking", "323232", "tornado", "lindsey", "content", "bruce", "buck", "aragorn", "griffin", "chen", "campbell", "trojan", "christop", "newman", "wayne", "tina", "rockstar", "father", "geronimo", "pascal", "crimson", "brooks", "hector", "penny", "anna", "camera", "chandler", "fatcat", "lovelove", "cody", "cunts", "waters", "stimpy", "finger", "cindy", "wheels", "viper1", "latin", "robin", "greenday", "987654321", "creampie", "brendan", "hiphop", "willy", "snapper", "funtime", "duck", "trombone", "adult", "cotton", "cookies", "kaiser", "mulder", "westham", "latino", "jeep", "ravens", "aurora", "drizzt", "madness", "energy", "kinky", "314159", "sophia", "stefan", "slick", "rocker", "55555555", "freeman", "french", "mongoose", "speed", "dddddd", "hong", "henry", "hungry", "yang", "catdog", "cheng", "ghost", "gogogo", "randy", "tottenha", "curious", "butterfl", "mission", "january", "singer", "sherman", "shark", "techno", "lancer", "lalala", "autumn", "chichi", "orion", "trixie", "clifford", "delta", "bobbob", "bomber", "holden", "kang", "kiss", "1968", "spunky", "liquid", "mary", "beagle", "granny", "network", "bond", "kkkkkk", "millie", "1973", "biggie", "beetle", "teacher", "susan", "toronto", "anakin", "genius", "dream", "dang", "bush"]
+
+MarkovCrack.init = function()
+	if self.chains.len > 0 then return "Already loaded!"
+    self.load_keywords
+	self.build_chain
+	self.sort_chains_by_frequency
+end function
+
+MarkovCrack.crack = function()
+    self.attempts = 0
+	for i in range(0, len(self.chains.indexes) - 1)
+		token = self.chains.indexes[i]
+		result = self.recurse(token, self.max_length)
+		if result != null then
+			return result
+		end if
+	end for
+	print("Password not found after " + self.attempts + " attempts.")
+	return 1
+end function
+
+MarkovCrack.load_keywords = function()
+	if self.keywords != [] then return 
+end function
+
+MarkovCrack.connect = function(password) 
+	if self.ip != "" and self.port != null then
+		service = "ssh"
+		if self.port == 21 then service = "ftp"
+		return get_shell.connect_service(
+			self.ip,
+			self.port,
+			self.user,
+			password,
+			service)
+	else
+		return get_shell(self.user, password)
+	end if
+	return null
+end function
+
+MarkovCrack.build_chain = function()
+	for word in self.keywords
+		for i in range(0, len(word) - self.order - 1)
+			sub_text = word[i : i + self.order]
+			if not self.chains.hasIndex(sub_text) then
+				self.chains[sub_text] = []
+			end if
+			next_char = word[i + self.order]
+			if self.chains[sub_text].indexOf(next_char) == null then
+				self.chains[sub_text].push(next_char)
+			end if
+		end for
+	end for
+	print("<color=orange>[MarkovCrack] </color>" + len(self.chains) + " keywords built.")
+end function
+
+MarkovCrack.sort_chains_by_frequency = function()
+    print("Sorting probabilities, please wait a few moments...")
+    if self.trigram_frequencies == null then
+        self.calculate_trigram_frequencies
+    end if
+    sortable = []
+    for trigram in self.chains.indexes
+        freq = 0
+        if self.trigram_frequencies.hasIndex(trigram) then
+            freq = self.trigram_frequencies[trigram]
+        end if
+        sortable.push({"trigram": trigram, "frequency": freq})
+    end for
+    sortable = self.sort_by_frequency(sortable)
+    sorted_indexes = []
+    for item in sortable
+        sorted_indexes.push(item.trigram)
+    end for
+    self.chains.indexes = sorted_indexes
+end function
+
+MarkovCrack.calculate_trigram_frequencies = function()
+    frequencies = {}
+    for sample in self.keywords
+        for i in range(0, len(sample) - self.order - 1)
+            trigram = sample[i : i + self.order]
+            if not frequencies.hasIndex(trigram) then
+                frequencies[trigram] = 0
+            end if
+            frequencies[trigram] = frequencies[trigram] + 1
+        end for
+    end for
+    self.trigram_frequencies = frequencies
+end function
+
+MarkovCrack.sort_by_frequency = function(arr)
+    n = len(arr)
+    for i in range(0, n - 2)
+        for j in range(0, n - i - 2)
+            if arr[j].frequency < arr[j + 1].frequency then
+                temp = arr[j]
+                arr[j] = arr[j + 1]
+                arr[j + 1] = temp
+            end if
+        end for
+    end for
+    return arr
+end function
+
+MarkovCrack.recurse = function(token, max_length)
+	password = token.lower
+	result = self.connect(password)
+	self.attempts = self.attempts + 1
+	if result != null then
+		print("<color=green>- Password: <b>" + password )
+        get_custom_object.MCPass = password
+		return result
+	else
+		upper_first_char = password[0].upper + password[1:]
+		result = self.connect(upper_first_char)
+		self.attempts = self.attempts + 1
+		if result != null then
+			print("<color=green>- Password: <b>" + upper_first_char)
+			get_custom_object.MCPass = upper_first_char
+            return result
+		end if
+	end if
+
+    if self.attempts % 250000 == 0 then
+        print("<color=#888888>[Cracking] " + self.attempts + " attempts... currently building off: " + token + "</color>")
+    end if
+
+	if len(token) >= max_length then
+		return null
+	end if
+	start_idx = len(token) - self.order
+	sub_text = token[start_idx : start_idx + self.order]
+	if not self.chains.hasIndex(sub_text) then
+		return null
+	end if
+	next_chars = self.chains[sub_text]
+	for next_char in next_chars
+		new_password = token + next_char
+		result = self.recurse(new_password, max_length)
+		if result != null then
+			return result
+		end if
+	end for
+	return null
+end function
+
+ExplorOS = {}
+
+
+ExplorOS.resolvePath = function(currentPath, targetPath)
+    if targetPath == "" then
+        return currentPath
+    end if
+    
+    if targetPath.indexOf("/") == 0 then
+        return targetPath // Absolute path
+    end if
+    
+    if targetPath == ".." then
+        parts = currentPath.split("/")
+        if parts.len <= 2 then
+            return "/"
+        end if
+        parts.pop
+        return parts.join("/")
+    end if
+    
+    if currentPath == "/" then
+        return "/" + targetPath
+    end if
+    
+    return currentPath + "/" + targetPath
+end function
+
+ExplorOS.splitPath = function(fullPath)
+    if fullPath == "/" then
+        return {"dir": "/", "myname": ""}
+    end if
+    
+    parts = fullPath.split("/")
+    myname = parts.pop
+    dir = parts.join("/")
+    
+    if dir == "" then
+        dir = "/" 
+    end if
+    
+    return {"dir": dir, "myname": myname}
+end function
+
+ExplorOS.getFile = function(remoteComp, baseFile, targetPath)
+    if remoteComp != null then
+        return remoteComp.File(targetPath)
+    end if
+    
+    if baseFile == null then
+        return null
+    end if
+    
+    curr = baseFile
+    while curr.parent != null
+        curr = curr.parent
+    end while
+    
+    if targetPath == "/" then
+        return curr
+    end if
+    
+    parts = targetPath.split("/")
+    for part in parts
+        if part == "" then
+            continue
+        end if
+        
+        found = false
+        if curr.is_folder then
+            for f in curr.get_folders
+                if f.name == part then
+                    curr = f
+                    found = true
+                    break
+                end if
+            end for
+            
+            if not found then
+                for f in curr.get_files
+                    if f.name == part then
+                        curr = f
+                        found = true
+                        break
+                    end if
+                end for
+            end if
+        end if
+        
+        if not found then
+            return null
+        end if
+    end for
+    
+    return curr
+end function
+
+ExplorOS.printTree = function(folderObj, depthStr)
+    if folderObj == null then
+        return
+    end if
+    
+    if not folderObj.has_permission("r") then
+        print(depthStr + "<color=red>|-- " + folderObj.name + " [" + folderObj.permissions + "]</color>")
+        return
+    end if
+
+    print(depthStr + "<color=#4287f5>|-- " + folderObj.name + "/</color> [" + folderObj.permissions + "]")
+    
+    newDepth = depthStr + "    " 
+    
+    for f in folderObj.get_files
+        outStr = newDepth
+        isSymlink = (f.permissions.indexOf("l") == 0)
+        
+        if f.is_binary then
+            outStr = outStr + "<color=#42DB91>|-- " + f.name + "</color>"
+        else if isSymlink then
+            outStr = outStr + "<color=#00FFFF>|-- " + f.name + " (@link)</color>"
+        else
+            outStr = outStr + "<color=white>|-- " + f.name + "</color>" 
+        end if
+        
+        outStr = outStr + " [" + f.permissions + "]"
+        print(outStr)
+    end for
+    
+    for subDir in folderObj.get_folders
+        if subDir.name == "." or subDir.name == ".." then
+            continue
+        end if
+        ExplorOS.printTree(subDir, newDepth)
+    end for
+end function
+
+
+ExplorOS.start = function(shellorcomp, originalHost)
+    localShell = originalHost
+    rsp = null 
+    rcp = null
+    baseFile = null
+    
+    if typeof(shellorcomp) == "shell" then 
+        remoteShell = shellorcomp
+        rsp = "<color=green>Enabled</color>"
+        remoteComp = remoteShell.host_computer
+        rcp = "<color=green>Enabled</color>"
+    else if typeof(shellorcomp) == "computer" then 
+        remoteShell = null
+        rsp = "<color=red>Disabled</color>"
+        remoteComp = shellorcomp
+        rcp = "<color=green>Enabled</color>"
+    else if typeof(shellorcomp) == "file" then
+        remoteShell = null
+        rsp = "<color=red>Disabled</color>"
+        remoteComp = null
+        rcp = "<color=red>Disabled</color>"
+        baseFile = shellorcomp
+    else
+        return print("unsupported type passed to ExplorOS.start")
+    end if
+    
+    currentPath = "/"
+    if baseFile != null then
+        currentPath = baseFile.path
+        if not baseFile.is_folder and baseFile.parent != null then 
+            currentPath = baseFile.parent.path 
+        end if
+    end if
+    
+    print("\n<color=#42DB91>--- Entering ExplorOS ---</color>")
+    print("Remote Shell: " + rsp)
+    print("Remote Computer: " + rcp)
+    print("Type 'help' for commands. Type 'exit' to return to Hub.\n")
+    
+    while true
+        cmdInput = user_input("<color=#4287f5>[ExplorOS: " + currentPath + "]</color>> ", 0, 0, 1)
+        if cmdInput == "" then
+            continue
+        end if
+        
+        args = cmdInput.split(" ")
+        cmd = args[0].lower
+        
+        if cmd == "exit" or cmd == "quit" then
+            print("<color=#42DB91>--- Exiting ExplorOS ---</color>\n")
+            break
+            
+        else if cmd == "help" then
+            print("Commands:")
+            print("  tree [path]          - Recursively draw the file system (e.g., 'tree /')")
+            print("  cd [path]            - Change directory (supports .. and absolute / paths)")
+            print("  ls [path]              - List files in current directory or specified path")
+            print("  find [keyword] [path] - Search for files/folders by name (e.g., 'find mail /')")
+            print("  cat [file]           - Read a text file")
+            print("  rm [file]            - Delete a file or folder")
+            print("  mv [src] [dest]      - Move or rename a file/folder")
+            print("  cp [src] [dest]      - Copy a file/folder")
+            print("  touch [file]         -"+rcp+"- Create an empty file")
+            print("  mkdir [dir]          -"+rcp+"- Create a new directory")
+            print("  download [file]      -"+rsp+"- Download remote file to local /root")
+            print("  upload [path]        -"+rsp+"- Upload local file to current remote dir")
+            print("  chmod [perms] [file] - Change file permissions (e.g., chmod u+rwx file.exe)")
+            print("  chown [user] [file]  - Change file owner")
+            print("  exit                 - Return to Hub")
+            print("Remote Shell: " + rsp)
+            print("Remote Computer: " + rcp)
+            
+        else if cmd == "cd" then
+            targetPath = "/"
+            if args.len >= 2 then
+                targetPath = args[1]
+            end if
+            
+            newPath = ExplorOS.resolvePath(currentPath, targetPath)
+            folderCheck = ExplorOS.getFile(remoteComp, baseFile, newPath)
+            
+            if folderCheck != null and folderCheck.is_folder then
+                currentPath = newPath
+            else
+                print("Error: Directory not found or is a file.")
+            end if
+        
+        else if cmd == "mkdir" then
+            if remoteComp == null then
+                print("Error: The 'mkdir' command requires a computer or shell object ("+rcp+").")
+                continue
+            end if
+
+            if args.len < 2 then 
+                print("Usage: mkdir [directory_name]")
+                continue
+            end if
+            
+            targetFullPath = ExplorOS.resolvePath(currentPath, args[1])
+            pathData = ExplorOS.splitPath(targetFullPath)
+            mkdirResult = remoteComp.create_folder(pathData.dir, pathData.myname)
+            
+            if typeof(mkdirResult) == "string" and mkdirResult != "" then
+                print("Error creating directory: " + mkdirResult)
+            else
+                print("Created directory: " + targetFullPath)
+            end if
+
+        else if cmd == "ls" then
+            targetPath = currentPath
+            if args.len >= 2 then
+                targetPath = ExplorOS.resolvePath(currentPath, args[1])
+            end if
+            
+            targetFolder = ExplorOS.getFile(remoteComp, baseFile, targetPath)
+            if targetFolder == null then
+                print("Error: Directory not found or permission denied.")
+                continue
+            end if
+            
+            if not targetFolder.is_folder then
+                print("Error: Target is a file. Use 'cat' to read it.")
+                continue
+            end if
+            
+            print("<color=#4287f5>" + targetFolder.name + "/</color> [" + targetFolder.permissions + "]")
+            
+            for f in targetFolder.get_folders
+                print("  <color=#4287f5>|-- " + f.name + "/</color> (" + f.owner + ":" + f.group + ") [" + f.permissions + "]")
+            end for
+            
+            for f in targetFolder.get_files
+                outStr = "  "
+                isSymlink = (f.permissions.indexOf("l") == 0)
+                
+                if f.is_binary then 
+                    outStr = outStr + "<color=#42DB91>|-- " + f.name + "</color>"
+                else if isSymlink then
+                    outStr = outStr + "<color=#00FFFF>|-- " + f.name + " (@link)</color>"
+                else 
+                    outStr = outStr + "<color=white>|-- " + f.name + "</color>"
+                end if
+                
+                outStr = outStr + " (" + f.owner + ":" + f.group + ") [" + f.permissions + "]"
+                print(outStr)
+            end for
+            
+        else if cmd == "tree" then
+            targetPath = currentPath
+            if args.len >= 2 then
+                targetPath = ExplorOS.resolvePath(currentPath, args[1])
+            end if
+            
+            targetFolder = ExplorOS.getFile(remoteComp, baseFile, targetPath)
+            if targetFolder == null then
+                print("Error: Directory not found.")
+                continue
+            end if
+            
+            if not targetFolder.is_folder then
+                print("Error: Target is a file, not a directory.")
+                continue
+            end if
+            
+            print("\n<color=#aaaaaa>Mapping file system...</color>")
+            ExplorOS.printTree(targetFolder, "")
+            print("") 
+
+        else if cmd == "find" or cmd == "search" then
+            if args.len < 2 then 
+                print("Usage: find [keyword] [optional: path]")
+                continue
+            end if
+            
+            searchTerm = args[1].lower
+            targetPath = currentPath
+            
+            if args.len >= 3 then
+                targetPath = ExplorOS.resolvePath(currentPath, args[2])
+            end if
+            
+            startFolder = ExplorOS.getFile(remoteComp, baseFile, targetPath)
+            if startFolder == null or not startFolder.is_folder then
+                print("Error: Starting directory not found.")
+                continue
+            end if
+            
+            print("\n<color=#aaaaaa>Searching for '" + searchTerm + "' in " + targetPath + "...</color>")
+            
+            foundCount = 0
+            scanQueue = [startFolder]
+            
+            while scanQueue.len > 0
+                currDir = scanQueue.pull
+                if currDir == null or not currDir.has_permission("r") then
+                    continue
+                end if
+                
+                for subDir in currDir.get_folders
+                    if subDir.name == "." or subDir.name == ".." then
+                        continue
+                    end if
+                    if subDir.name.lower.indexOf(searchTerm) != null then
+                        print("<color=#4287f5>[DIR]  " + subDir.path + "</color>")
+                        foundCount = foundCount + 1
+                    end if
+                    scanQueue.push(subDir)
+                end for
+                
+                for f in currDir.get_files
+                    if f.name.lower.indexOf(searchTerm) != null then
+                        print("<color=white>[FILE] " + f.path + "</color>")
+                        foundCount = foundCount + 1
+                    end if
+                end for
+            end while
+            
+            if foundCount == 0 then
+                print("<color=orange>No matches found.</color>\n")
+            else
+                print("<color=#42DB91>Found " + foundCount + " matches.</color>\n")
+            end if
+
+        else if cmd == "cat" or cmd == "read" then
+            if args.len < 2 then 
+                print("Usage: cat [file]")
+                continue
+            end if
+            
+            targetFile = ExplorOS.getFile(remoteComp, baseFile, ExplorOS.resolvePath(currentPath, args[1]))
+            
+            if targetFile == null then 
+                print("Error: File not found.") 
+            else if targetFile.is_folder then
+                print("Error: Target is a directory.")
+            else if targetFile.is_binary then 
+                print("Error: Cannot cat a binary.") 
+            else if not targetFile.has_permission("r") then 
+                print("Error: Permission denied.") 
+            else 
+                print(targetFile.get_content)
+            end if
+            
+        else if cmd == "rm" then
+            if args.len < 2 then 
+                print("Usage: rm [file]")
+                continue
+            end if
+            
+            targetFile = ExplorOS.getFile(remoteComp, baseFile, ExplorOS.resolvePath(currentPath, args[1]))
+            
+            if targetFile == null then 
+                print("Error: Not found.") 
+            else if not targetFile.has_permission("w") then 
+                print("Error: Permission denied.") 
+            else 
+                deleteResult = targetFile.delete
+                if typeof(deleteResult) == "string" and deleteResult != "" then
+                    print("Error deleting: " + deleteResult)
+                else
+                    print("Deleted: " + args[1])
+                end if
+            end if
+
+        else if cmd == "touch" then
+            if remoteComp == null then
+                print("Error: The 'touch' command requires a computer or shell object ("+rcp+").")
+                continue
+            end if
+
+            if args.len < 2 then 
+                print("Usage: touch [file]")
+                continue
+            end if
+            
+            targetFullPath = ExplorOS.resolvePath(currentPath, args[1])
+            pathData = ExplorOS.splitPath(targetFullPath)
+            
+            touchResult = remoteComp.touch(pathData.dir, pathData.myname)
+            if typeof(touchResult) == "string" then
+                print("Error touching file: " + touchResult)
+            else
+                print("Created: " + targetFullPath)
+            end if
+            
+        else if cmd == "mv" or cmd == "cp" then
+            if args.len < 3 then 
+                print("Usage: " + cmd + " [source] [destination]")
+                continue
+            end if
+            
+            srcPath = ExplorOS.resolvePath(currentPath, args[1])
+            destPath = ExplorOS.resolvePath(currentPath, args[2])
+            
+            srcFile = ExplorOS.getFile(remoteComp, baseFile, srcPath)
+            if srcFile == null then
+                print("Error: Source file/folder not found.")
+                continue
+            end if
+            
+            destFolderCheck = ExplorOS.getFile(remoteComp, baseFile, destPath)
+            if destFolderCheck != null and destFolderCheck.is_folder then
+                destDir = destPath
+                destName = srcFile.name 
+            else
+                pathData = ExplorOS.splitPath(destPath)
+                destDir = pathData.dir
+                destName = pathData.myname 
+            end if
+            
+            if cmd == "mv" then
+                result = srcFile.move(destDir, destName)
+                actionStr = "Moved"
+            else
+                result = srcFile.copy(destDir, destName)
+                actionStr = "Copied"
+            end if
+            
+            if typeof(result) == "string" and result != "" then
+                print("Error: " + result)
+            else
+                if destDir == "/" then
+                    destDir = "" 
+                end if
+                print(actionStr + " " + srcFile.name + " -> " + destDir + "/" + destName)
+            end if
+        
+        else if cmd == "chmod" then
+            if args.len < 3 then 
+                print("Usage: chmod [perms] [file] (e.g., chmod u+rwx file.exe)")
+                continue
+            end if
+            
+            targetFile = ExplorOS.getFile(remoteComp, baseFile, ExplorOS.resolvePath(currentPath, args[2]))
+            if targetFile == null then 
+                print("Error: File or directory not found.")
+            else
+                err = targetFile.chmod(args[1], 0) 
+                if typeof(err) == "string" and err != "" then
+                    print("Error: " + err)
+                else
+                    print("Permissions updated on " + args[2])
+                end if
+            end if
+            
+        else if cmd == "chown" then
+            if args.len < 3 then 
+                print("Usage: chown [user] [file]")
+                continue
+            end if
+            
+            targetFile = ExplorOS.getFile(remoteComp, baseFile, ExplorOS.resolvePath(currentPath, args[2]))
+            if targetFile == null then 
+                print("Error: File or directory not found.")
+            else
+                err = targetFile.set_owner(args[1], 0)
+                if typeof(err) == "string" and err != "" then
+                    print("Error: " + err)
+                else
+                    print("Owner updated on " + args[2] + " to " + args[1])
+                end if
+            end if
+
+        else if cmd == "download" then
+            if remoteShell == null then
+                print("Error: Download requires a shell object ("+rsp+").")
+                continue
+            end if
+
+            if args.len < 2 then 
+                print("Usage: download [file]")
+                continue
+            end if
+            
+            remoteFilePath = ExplorOS.resolvePath(currentPath, args[1])
+            localDropZone = self.DEFAULT_HOME_DIR
+            
+            transferResult = remoteShell.scp(remoteFilePath, localDropZone, localShell)
+            
+            if typeof(transferResult) == "string" then 
+                print("Download Failed: " + transferResult) 
+            else 
+                print("Downloaded to " + localDropZone + "/" + args[1])
+            end if
+            
+        else if cmd == "upload" then
+            if remoteShell == null then
+                print("Error: Upload requires a shell object ("+rsp+").")
+                continue
+            end if
+
+            if args.len < 2 then 
+                print("Usage: upload [local_file_path]")
+                continue
+            end if
+            
+            localFilePath = args[1] 
+            
+            transferResult = localShell.scp(localFilePath, currentPath, remoteShell)
+            
+            if typeof(transferResult) == "string" then 
+                print("Upload Failed: " + transferResult) 
+            else 
+                print("Uploaded to " + currentPath)
+            end if
+
+        else
+            print("Unknown command. Type 'help'.")
+        end if
+    end while
+end function
+
+
+
+Jarvis.init = function()
+    if self.inited then return true
+    if not self.clone then
+        self.origin_dir = home_dir
+    end if
+
+    self.EXPLOITSLIBRARY = self.origin_dir + "/.jarvis_cache.txt"
+    self.RSHELLS_DB = self.origin_dir + "/.jarvis_rshells.txt"
+    self.ROOTNETWORKS_DB = self.origin_dir + "/.jarvis_rootnet.txt"
+    self.BOUNCE_CACHE = self.origin_dir + "/.jarvis_bounce_cache.txt"
+    self.MACRO_DB = self.origin_dir + "/.jarvis_macro.txt"
+	
+    self.getLocalLibs
+    self.originalShell = get_shell
+    self.focusedObject = get_shell
+    self.focusedIndex = 0 
+    self.rootNetworks = {}
+    
+    cacheData = self.loadCache(self.ROOTNETWORKS_DB)
+    if typeof(cacheData) == "list" and cacheData.len > 0 then
+        self.rootNetworks = cacheData[0]
+    end if
+	
+    self.objectsObtained = []
+    self.metaList = [] 
+    self.track_object(self.originalShell)
+	
+    self.badObjects = []
+    self.crack = new MarkovCrack
+    self.crack.init
+    
+    self.explore = new ExplorOS
+    self.explore.DEFAULT_HOME_DIR = self.origin_dir
+    
+    if self.bounceChain.len == 0 then 
+        hc = self.originalShell.host_computer
+        origUser = "User"
+        if self.canRWX(hc.File("/root")) then origUser = "root"
+        self.bounceChain.push({"type": "ORIGIN", "pubIP": hc.public_ip, "lanIP": hc.local_ip, "user": origUser, "shell":self.originalShell})
+    end if
+	
+    self.inited = true
+    return true
+end function
+
+Jarvis.extractMeta = function(someObject)
+    type = typeof(someObject)
+    info = ""
+    user = "Unknown"
+    pubIP = ""
+    lanIP = ""
+
+    if type == "shell" or type == "computer" then
+        hc = someObject
+        if type == "shell" then hc = someObject.host_computer
+        
+        if hc == null then return {"type": "DEAD", "info": "LOST", "user": "none", "pubIP": "", "lanIP": ""}
+
+        pubIP = hc.public_ip
+        lanIP = hc.local_ip
+        info = pubIP + "(" + lanIP + ")@" + hc.get_name
+        user = "guest"
+        
+        homeDir = hc.File("/home")
+        if homeDir != null then
+            for each in homeDir.get_folders
+                if self.canRWX(each) then user = each.name
+            end for
+        end if
+        
+        rootDir = hc.File("/root")
+        if rootDir != null and self.canRWX(rootDir) then user="root"
+
+    else if type == "file" then
+        user = "file_object: " + someObject.name
+        info = "<color=red>No /lib/ Access</color>"
+        rootDir = someObject
+        while rootDir.parent != null
+            rootDir = rootDir.parent
+        end while
+        if rootDir != null then
+            for each in rootDir.get_folders
+                if each.name == "lib" and each.has_permission("r") then
+                    info = "<color=green>/lib/ Access!</color>" 
+                end if
+            end for
+        end if
+    else
+        type = "string"
+        user = ""
+        info = someObject
+    end if
+    
+    return {"type":type, "info":info, "user":user, "pubIP":pubIP, "lanIP":lanIP}
+end function
+
+Jarvis.track_object = function(obj, customMeta = null)
+    self.objectsObtained.push(obj)
+    if customMeta != null then
+        self.metaList.push(customMeta)
+    else
+        self.metaList.push(self.extractMeta(obj))
+    end if
+end function
+
+Jarvis.canRWX = function(targetFile)
+    if targetFile == null then return false
+    if targetFile.has_permission("r") == 1 and targetFile.has_permission("w") == 1 and targetFile.has_permission("x") == 1 then
+        return true
+    end if
+    return false
+end function
+
+Jarvis.getLocalLibs = function()
+    self.metax = include_lib("/lib/metaxploit.so")
+	self.crypto = include_lib("/lib/crypto.so")
+	self.APTCLIENT = include_lib("/lib/aptclient.so")
+	if not self.APTCLIENT then self.APTCLIENT = include_lib(current_path + "aptclient.so")
+	if self.APTCLIENT == null then exit("Cannot find/load /lib/aptclient.so ")
+	if not self.metax then self.metax = include_lib(current_path + "metaxploit.so")
+	if not self.crypto then self.crypto = include_lib(current_path + "crypto.so")
+	if not self.metax or not self.crypto then 
+		self.APTCLIENT.update
+        self.APTCLIENT.add_repo(self.HACKSHOP)
+		self.APTCLIENT.update
+		self.APTCLIENT.install("metaxploit.so")
+		self.APTCLIENT.install("crypto.so")
+		self.APTCLIENT.del_repo(self.HACKSHOP)
+		self.metax = include_lib("/lib/metaxploit.so")
+		self.crypto = include_lib("/lib/crypto.so")
+		if not self.metax or not self.crypto then exit("Jarvis: key libraries not found during init.")
+        // mf = get_shell.host_computer.File("/lib/metaxploit.so")
+        // cf = get_shell.host_computer.File("/lib/crypto.so")
+        // if mf and mf.has_permission("w") then mf.delete
+        // if cf and cf.has_permission("w") then cf.delete
+	end if
+    self.crackingFrom = get_shell.host_computer.public_ip + " <color=#888888>(" + get_shell.host_computer.local_ip + ") @ " + get_shell.host_computer.get_name
+end function
+
+Jarvis.sweep_lan = function(rLib, bounceMem, bounceVuln, router)
+    captured_comps = []
+    scannedIPs = {}
+    
+    // 1. Identify the Router's Primary Subnet
+    rParts = router.local_ip.split("\.")
+    primarySubnet = ""
+    if rParts.len == 4 then primarySubnet = rParts[0] + "." + rParts[1] + "." + rParts[2] + "."
+    
+    // 2. Gather All Guaranteed IPs
+    knownIPs = []
+    if typeof(router.devices_lan_ip) == "list" then
+        for ip in router.devices_lan_ip
+            if knownIPs.indexOf(ip) == null then knownIPs.push(ip)
+        end for
+    end if
+    
+    for p in router.used_ports
+        pLan = p.get_lan_ip
+        if knownIPs.indexOf(pLan) == null then knownIPs.push(pLan)
+    end for
+    
+    subnetsToSweep = {}
+    
+    // --- PHASE 1: DIRECT STRIKE ---
+    // Attack known IPs directly. Zero misses, zero spam.
+    for ip in knownIPs
+        if ip == router.local_ip then continue
+        if scannedIPs.hasIndex(ip) then continue
+        
+        scannedIPs[ip] = true
+        cObj = rLib.overflow(bounceMem, bounceVuln, ip)
+        if typeof(cObj) == "computer" then captured_comps.push(cObj)
+        
+        // Did this known IP reveal a switch subnet?
+        parts = ip.split("\.")
+        if parts.len == 4 then
+            base = parts[0] + "." + parts[1] + "." + parts[2] + "."
+            if base != primarySubnet then subnetsToSweep[base] = true
+        end if
+    end for
+    
+    // --- PHASE 2: SURGICAL SWEEP ---
+    // Apply the heuristic sweep ONLY to subnets behind switches
+    for base in subnetsToSweep.indexes
+        misses = 0
+        foundInFirstThree = false
+        
+        for i in range(1, 30) // Capped at .30
+            lanIP = base + i
+            if lanIP == router.local_ip then continue
+            
+            if scannedIPs.hasIndex(lanIP) then
+                // We hit this in Phase 1. It counts as a success for our heuristic!
+                misses = 0
+                if i <= 3 then foundInFirstThree = true
+                continue
+            end if
+            
+            scannedIPs[lanIP] = true
+            cObj = rLib.overflow(bounceMem, bounceVuln, lanIP)
+            
+            if typeof(cObj) == "computer" then
+                misses = 0
+                if i <= 3 then foundInFirstThree = true
+                captured_comps.push(cObj)
+            else
+                misses = misses + 1
+            end if
+            
+            // Break Conditions
+            if i == 3 and not foundInFirstThree then break 
+            if misses >= 2 then break 
+        end for
+    end for
+    
+    return captured_comps
+end function
+
+// --- FILE I/O ---
+Jarvis.loadCache = function(fileNamePath = "")
+	loadCache = []
+	comp = self.originalShell.host_computer 
+	cacheFile = comp.File(fileNamePath)
+	
+	if not cacheFile then return null
+	rawContent = cacheFile.get_content
+	if not rawContent then return null
+	
+    content = JarvisCrypt.decrypt(rawContent, self.MASTER_KEY)
+	lines = content.split(char(10))
+
+    for eachLine in lines
+        if eachLine.trim == "" then continue
+        loadCache.push(self.parseStringIntoVariable(eachLine))
+    end for
+    return loadCache
+end function
+
+Jarvis.saveCache = function(cacheFileNamePath = "", variableToSave, overwrite = 0) 
+	comp = self.originalShell.host_computer
+	if not comp.File(cacheFileNamePath) then
+        parts = cacheFileNamePath.split("/")
+        fileName = parts.pop             
+        dirPath = parts.join("/")        
+        if dirPath == "" then dirPath = "/" 
+        comp.touch(dirPath, fileName)
+    end if
+    
+	cacheFile = comp.File(cacheFileNamePath)
+	if not cacheFile then return print("<color=red>Cache Error: Could not write to origin.</color>")
+    
+    content = ""
+    if overwrite == 0 then 
+        rawContent = cacheFile.get_content.trim
+        if rawContent != "" then content = JarvisCrypt.decrypt(rawContent, self.MASTER_KEY)
+    end if
+
+    if content != "" then
+        content = content + char(10) + str(variableToSave)
+    else
+        content = str(variableToSave)
+    end if
+    
+    encryptedContent = JarvisCrypt.encrypt(content, self.MASTER_KEY)
+	cacheFile.set_content(encryptedContent)
+    return true
+end function
+
+Jarvis.parseStringIntoVariable = function(dataStr = "")
+	parser = {"src": dataStr, "idx": 0, "len": dataStr.len}
+	
+	parser.skipSpace = function()
+		while self.idx < self.len
+			c = self.src[self.idx]
+			if c != " " and c != char(9) and c != char(10) and c != char(13) then break
+			self.idx = self.idx + 1
+		end while
+	end function
+	
+	parser.parseStr = function()
+		self.idx = self.idx + 1 
+		res = ""
+		while self.idx < self.len
+			c = self.src[self.idx]
+			if c == """" then
+				self.idx = self.idx + 1 
+				return res
+			end if
+			if c == "\" and self.idx + 1 < self.len then
+				self.idx = self.idx + 1
+				c = self.src[self.idx]
+			end if
+			res = res + c
+			self.idx = self.idx + 1
+		end while
+		return res
+	end function
+	
+	parser.parseNumOrBool = function()
+		startIdx = self.idx
+		while self.idx < self.len
+			c = self.src[self.idx]
+			if c == "," or c == "]" or c == "}" or c == " " or c == char(10) or c == char(13) then break
+			self.idx = self.idx + 1
+		end while
+		
+		valStr = self.src[startIdx : self.idx]
+		if valStr == "true" then return true
+		if valStr == "false" then return false
+		if valStr == "null" then return null
+		
+		return valStr.val 
+	end function
+	
+	parser.parseList = function()
+		res = []
+		self.idx = self.idx + 1 
+		self.skipSpace()
+		if self.idx < self.len and self.src[self.idx] == "]" then
+			self.idx = self.idx + 1
+			return res
+		end if
+		
+		while self.idx < self.len
+			res.push(self.parseVal())
+			self.skipSpace()
+			if self.idx < self.len and self.src[self.idx] == "," then
+				self.idx = self.idx + 1 
+			else if self.idx < self.len and self.src[self.idx] == "]" then
+				self.idx = self.idx + 1 
+				break
+			end if
+		end while
+		return res
+	end function
+	
+	parser.parseMap = function()
+		res = {}
+		self.idx = self.idx + 1 
+		self.skipSpace()
+		if self.idx < self.len and self.src[self.idx] == "}" then
+			self.idx = self.idx + 1
+			return res
+		end if
+		
+		while self.idx < self.len
+			self.skipSpace()
+			key = self.parseStr() 
+			
+			self.skipSpace()
+			if self.idx < self.len and self.src[self.idx] == ":" then
+				self.idx = self.idx + 1
+			end if
+			
+			res[key] = self.parseVal()
+			
+			self.skipSpace()
+			if self.idx < self.len and self.src[self.idx] == "," then
+				self.idx = self.idx + 1 
+			else if self.idx < self.len and self.src[self.idx] == "}" then
+				self.idx = self.idx + 1 
+				break
+			end if
+		end while
+		return res
+	end function
+	
+	parser.parseVal = function()
+		self.skipSpace()
+		if self.idx >= self.len then return null
+		
+		c = self.src[self.idx]
+		if c == "{" then return self.parseMap()
+		if c == "[" then return self.parseList()
+		if c == """" then return self.parseStr()
+		
+		return self.parseNumOrBool()
+	end function
+
+	return parser.parseVal()
+end function
+
+Jarvis.run_nmap = function(args)
+    isNoisy = false
+    if args.indexOf("-v") != null then
+        isNoisy = true
+        args.remove(args.indexOf("-v"))
+    end if
+    
+    if args.len == 0 then 
+        ipAddress = user_input("Scan which address?> ",0,0,1).trim
+    else
+        ipAddress = args[0]
+    end if
+    
+    // --- Domain Resolution (nslookup) ---
+    targetDomain = ""
+    if not is_valid_ip(ipAddress) then
+        targetDomain = ipAddress
+        resolvedIp = nslookup(ipAddress)
+        if typeof(resolvedIp) != "string" or not is_valid_ip(resolvedIp) then 
+            return "Error: Could not resolve domain '" + ipAddress + "'."
+        end if
+        ipAddress = resolvedIp
+    end if
+    
+    if get_shell.ping(ipAddress) != 1 then 
+        return "Error: Could not ping target."
+    end if
+    
+    if ipAddress == "127.0.0.1" then 
+        ipAddress = get_shell.host_computer.local_ip
+    end if
+    
+    targetIp = ipAddress
+    isLanIp = is_lan_ip(ipAddress)
+    
+    router = null
+    ports = null
+    
+    if isLanIp then
+        router = get_router()
+        if not router then return "Error: Couldn't get local router."
+        ports = router.device_ports(ipAddress)
+    else 
+        router = get_router(ipAddress)
+        if not router then return "Error: Couldn't get remote router."
+        ports = router.used_ports
+    end if
+    
+    banner = []
+    banner.push("    _   ____  ______  ___  ")
+    banner.push("   / | / /  |/  /   |  / _ " + char(92) + " ")
+    banner.push("  /  |/ / /|_/ / /| | / /_/ /")
+    banner.push(" / /|  / /  / / ___ |/ ____/ ")
+    banner.push("/_/ |_/_/  /_/_/  |_/_/   v3.1 ")
+    
+    out = "<b><color=#00A8A8>" + banner.join("\n") + "\n"
+    out = out + "<color=#00A8A8>============================================================</color>\n"
+    
+    if targetDomain != "" then
+        out = out + "<color=#00A8A8><b>Target:</b> " + targetDomain + " (" + targetIp + ")\n"
+    else
+        out = out + "<color=#00A8A8><b>Target:</b> " + targetIp + "\n"
+    end if
+    
+    out = out + "<color=#00A8A8><b>Router:</b> " + router.public_ip + " (Public) / " + router.local_ip + " (Local)\n"
+    out = out + "<color=#00A8A8><b>Kernel:</b> " + router.kernel_version + "\n"
+    
+    bssid = router.bssid_name
+    essid = router.essid_name
+    
+    if bssid then out = out + "<b>BSSID:</b>  " + bssid + "\n"
+    if essid then out = out + "<b>ESSID:</b>  " + essid + "\n"
+    
+    // --- WHOIS Integration ---
+    if not isLanIp then
+        whois_info = whois(targetIp)
+        if typeof(whois_info) == "string" and whois_info.len > 0 then
+            out = out + "<color=#00A8A8>------------------------------------------------------------</color>\n"
+            out = out + "<b><color=#B266FF>[ WHOIS DATA ]</color></b>\n<color=#aaaaaa>" + whois_info.trim + "</color>\n"
+        end if
+    end if
+    
+    out = out + "<color=#00A8A8>------------------------------------------------------------</color>\n"
+    print("<color=#00A8A8>"+out)
+    
+    print("<b><color=#00FFFF>[ EXTERNAL PORT SCAN ]</color></b>")
+    if typeof(ports) != "list" or ports.len == 0 then
+        print("<color=#00FFFF>No open ports found.\n")
+    else
+        // --- Dynamic Headers ---
+        portHeaders = "PORT STATE SERVICE LAN_IP"
+        if isNoisy and self.metax then
+            portHeaders = portHeaders + " USERS_ACTIVE(R/A/T) LIBRARY VERSION"
+        end if
+        portData = portHeaders
+        
+        for port in ports
+            pNum = port.port_number
+            pState = "CLOSED"
+            
+            if not port.is_closed or isLanIp then pState = "OPEN"
+            
+            pService = router.port_info(port).replace(" ", "_")
+            pLan = port.get_lan_ip
+            
+            extraData = ""
+            
+            if isNoisy and self.metax then
+                libName = "-"
+                libVers = "-"
+                uInfo = "-/-/-"
+                
+                netsh = self.metax.net_use(targetIp, pNum)
+                if not netsh and isLanIp then netsh = self.metax.net_use(router.public_ip, pNum)
+                
+                if netsh then
+                    dump = netsh.dump_lib
+                    if dump then
+                        libName = dump.lib_name
+                        libVers = dump.version
+                    end if
+                    
+                    rUsr = netsh.is_root_active_user
+                    aUsr = netsh.is_any_active_user
+                    tUsr = netsh.get_num_users
+                    uInfo = rUsr + "/" + aUsr + "/" + tUsr
+                end if
+                
+                // Append the noisy data to the row
+                extraData = " " + uInfo + " " + libName + " " + libVers
+            end if
+
+            portData = portData + "\n" + pNum + " " + pState + " " + pService + " " + pLan + extraData
+        end for
+        print(format_columns(portData) + "\n")
+    end if
+
+    print("<color=#00FFFF>============================================================</color>")
+    return true
+end function
+
+Jarvis.get_exploits = function(mLib)
+    cacheKey = mLib.lib_name + " " + mLib.version
+    
+    exploitsLib = self.loadCache(self.EXPLOITSLIBRARY)
+    neededLib = {}
+    
+    if typeof(exploitsLib) == "list" then
+        for each in exploitsLib
+            if typeof(each) == "map" and each.hasIndex(cacheKey) then 
+                 return each[cacheKey] 
+            end if
+        end for
+    end if
+    
+    print("<color=orange>[" + cacheKey + "] Not in cache. Initiating deep scan...</color>")
+    memAddrs = self.metax.scan(mLib)
+    if typeof(memAddrs) != "list" or memAddrs.len == 0 then return {}
+    
+    exploitPairs = {}
+    for mem in memAddrs
+        exploitPairs[mem] = [] 
+        scanData = self.metax.scan_address(mLib, mem)
+        if typeof(scanData) != "string" then continue
+        
+        lines = scanData.split(char(10))
+        for line in lines
+            if line.indexOf("Unsafe check") != null then
+                vuln = line.split("<b>")[1].split("</b>")[0]
+                exploitPairs[mem].push(vuln) 
+            end if
+        end for
+    end for
+    
+    neededLib[cacheKey] = exploitPairs 
+    self.saveCache(self.EXPLOITSLIBRARY, neededLib)
+    return exploitPairs
+end function
+
+Jarvis.filePivot = function(input)
+	if typeof(input) == "shell" then
+		targetObj = input.host_computer.File("/")
+	else if typeof(input) == "computer" then
+		targetObj = input.File("/")
+	else if typeof(input) == "file" then
+		targetObj = input
+	else
+		print "Unsupported object type passed to filePivot"
+		return
+	end if	
+	if typeof(targetObj) != "file" then exit("filePivot: Cannot parse out a file object")
+	
+	libs = []
+	fileStore = {}	
+
+	curr = targetObj
+	while curr.parent != null
+		curr = curr.parent
+	end while
+	
+	rootFolders = curr.get_folders
+	for each in rootFolders
+		
+		if each.name == "lib" then
+			for lib in each.get_files
+				libs.push(lib)
+			end for
+			
+		else if each.name == "home" then
+			home = each
+			userfolders = home.get_folders
+			
+			for user in userfolders
+				fileStore[user.name] = {}
+				for file in user.get_files
+					if file.has_permission("r") == 1 and file.is_binary == 0 then fileStore[user.name][file.name] = file.get_content
+				end for
+				
+				for insidehome_user in user.get_folders
+					for file in insidehome_user.get_files
+						if file.has_permission("r") == 1 and file.is_binary == 0 then fileStore[user.name][file.name] = file.get_content
+					end for
+				end for
+			end for
+			
+		else if each.name == "etc" then
+			etcFiles = each.get_files
+			for each2 in etcFiles
+				if each2.has_permission("r") and each2.name == "passwd" then 
+					fileStore.etc = {}
+					fileStore.etc.passwd = each2.get_content
+				end if
+			end for
+		end if
+	end for
+	for username in fileStore.indexes
+		print("<u><b>User: " + username )
+		for filename in fileStore[username].indexes
+			content = fileStore[username][filename]
+			lines = content.split(char(10))
+			accountsInFile = []
+			for line in lines
+				parts = line.split(":")
+				if parts.len == 2 then 
+					accountsInFile.push(line)
+				end if
+			end for
+			if accountsInFile.len > 0 then print("File: " + filename + " | Accounts: \n" + accountsInFile.join(char(10)))
+		end for
+	end for
+end function
+
+Jarvis.IPScanner = function(ip="", port=0)
+	if not self.inited then self.init
+	if is_valid_ip(ip) != 1 then return "Invalid IP"
+	if typeof(port) == "string" then port = port.to_int
+	
+	netsesh = self.metax.net_use(ip, port)
+	if typeof(netsesh) != "NetSession" then return "Couldn't get net session"
+	mLib = netsesh.dump_lib
+	if typeof(mLib) != "MetaLib" then return "Couldn't dump lib from net session"
+	
+	return mLib
+end function
+
+Jarvis.process_metaLib = function(mLib)
+	print("<color=#00FFFF>Target Library: " + mLib.lib_name + " " + mLib.version + "</color>")
+
+    exploitPairs = self.get_exploits(mLib)
+	if exploitPairs.len == 0 then return "Scan finished but no vulnerabilities found."
+    
+	objects = []
+	for memadd in exploitPairs.indexes
+		for keyword in exploitPairs[memadd]
+			result = mLib.overflow(memadd, keyword)
+			
+            if typeof(result) == "number" then 
+				print("<color=red>Number Result for:</color> " + memadd + " " + keyword)
+				objects.push(memadd + "|" + keyword  + "=" + result)
+            else if result == null then
+                continue
+            else if typeof(result) == "shell" then
+                objects.push(result)
+                ui = user_input("<color=orange>Shell obtained - Press Enter to stop (Default), or type any key to continue scanning > </color>").trim.lower
+                if ui == "" then return objects 
+            else
+				objects.push(result)
+			end if
+		end for
+	end for
+	
+	return objects
+end function
+
+Jarvis.process_macro = function()
+    // Base Case: If the chain is empty, we have reached the final node! Drop into the dashboard.
+    if self.autoChain.len == 0 then 
+        print("<color=#84BD00>Macro chain successfully established.</color>")
+        self.main()
+        return
+    end if
+    
+    // Recursive Case: Pull the next node and execute the SSH -> Proxy combo
+    nextHop = self.autoChain.pull() 
+    print("\n<color=orange>[Macro] SSH Connecting to " + nextHop.ip + ":" + nextHop.port + " as " + nextHop.user + " ...</color>")
+    
+    locShell = get_shell
+    res = locShell.connect_service(nextHop.ip, nextHop.port.to_int, nextHop.user, nextHop.pass)
+    
+    if typeof(res) != "shell" then
+        print("<color=red>[Macro] SSH failed to " + nextHop.ip + " -> " + res + "</color>")
+        print("<color=orange>Aborting remainder of macro chain. Dropping to menu.</color>")
+        self.main()
+        return
+    end if
+    
+    print("<color=#84BD00>[Macro] SSH connection established!</color>")
+    self.track_object(res)
+    self.focusedIndex = self.objectsObtained.len - 1
+    self.focusedObject = res
+    meta = self.metaList[self.focusedIndex]
+    
+    print("<color=orange>[Macro] Deploying Proxy to " + meta.pubIP + " ...</color>")
+    
+    self.bounceChain.push({"type": "PROXY", "pubIP": meta.pubIP, "lanIP": meta.lanIP, "user": meta.user, "shell":self.focusedObject})
+    self.libStack.push({"m": self.metax, "c": self.crypto, "a": self.APTCLIENT, "cln": self.clone})
+    self.originalShell.scp("/lib/aptclient.so", "/lib", self.focusedObject)
+    
+    // Pass Jarvis and the remaining array forward to the next machine
+    get_custom_object.tinyRCE = self
+    get_custom_object.macroChain = self.autoChain
+    
+    stub = [
+        "hoppedinst = new get_custom_object.tinyRCE",
+        "hoppedinst.getLocalLibs",
+        "hoppedinst.crypto = hoppedinst.libStack[hoppedinst.libStack.len - 1].c",
+        "hoppedinst.clone = true",
+        "hoppedinst.autoChain = get_custom_object.macroChain",
+        "get_custom_object.tinyRCE = hoppedinst",
+        "hoppedinst.process_macro", // <-- Triggers the next link in the chain instead of "main"
+    ]
+    
+    self.tinyRCE(self.focusedObject, stub.join(char(10)))
+    
+    // This executes when you eventually type "exit" and unravel the chain
+    self.objectsObtained = get_custom_object.tinyRCE.objectsObtained
+    self.metaList = get_custom_object.tinyRCE.metaList
+    
+    prevLibs = self.libStack.pop
+    self.metax = prevLibs.m
+    self.crypto = prevLibs.c
+    self.APTCLIENT = prevLibs.a
+    self.clone = prevLibs.cln 
+    
+    self.bounceChain.pop
+    print("<color=#BD0000>Proxy terminated. Resuming previous context...</color>")
+end function
+
+Jarvis.manualOF = function(mLib,mem,keyword,extra = "")
+    if extra != "" then 
+        result = mLib.overflow(mem,keyword, extra)
+    else
+        result = mLib.overflow(mem,keyword)
+    end if
+    return result
+end function
+
+Jarvis.tinyRCE = function(targetShell, codeString)
+    comp = targetShell.host_computer 
+    targetDir = ""
+    scanQueue = [comp.File("/")]
+    while scanQueue.len > 0
+        currentDir = scanQueue.pull
+        if currentDir != null and currentDir.has_permission("r")and currentDir.has_permission("w") and currentDir.has_permission("x") then 
+            targetDir = currentDir.path
+            break
+        end if
+        if currentDir != null then scanQueue = scanQueue + currentDir.get_folders
+    end while
+    if targetDir == "" then return print("RCE Error: No rwx directory found on target.")
+
+    srcName = ".sys_cache.src"
+	payloadName = ".sys_cache"
+    srcPath = targetDir + "/" + srcName
+    comp.touch(targetDir, srcName)
+    srcFile = comp.File(srcPath)
+    if not srcFile then return print("RCE Error: Filesystem locked or unwritable.")
+    
+    srcFile.set_content(codeString)
+    targetShell.build(srcPath, targetDir)
+
+    targetShell.launch(targetDir +"/"+payloadName)
+
+    srcFile.delete
+    if comp.File(targetDir +"/"+payloadName) != null then comp.File(targetDir +"/"+payloadName).delete
+end function
+
+Jarvis.rshell_install = function(args)
+    if typeof(self.focusedObject) != "shell" then
+        return print("<color=red>Requires shell focus.</color>")
+    end if
+
+    print("\n<color=orange>Installing librshell service and mapping network...</color>")
+    
+    get_custom_object.rsh_res = null
+    get_custom_object.rsh_w = null
+    get_custom_object.rsh_l = null
+    get_custom_object.rsh_p = null
+
+    stub = [
+        "a=include_lib(""/lib/aptclient.so"")",
+        "if not a then",
+        "  a=include_lib(current_path+""/aptclient.so"")",
+        "end if",
+        "if a then",
+        "  a.add_repo(""" + self.HACKSHOP + """)",
+        "  a.update",
+        "  a.install(""librshell.so"")",
+        "  a.del_repo(""" + self.HACKSHOP + """)",
+        "end if",
+        "rsh=include_lib(""/lib/librshell.so"")",
+        "if not rsh then",
+        "  exit(""<color=red>Error: librshell.so not found.</color>"")",
+        "end if",
+        "res=rsh.install_service",
+        "if res==1 then",
+        "  rsh.start_service",
+        "end if",
+        "s=get_shell",
+        "r=get_router",
+        "c=s.host_computer",
+        "p=[]",
+        "w=""UNKNOWN""",
+        "l=c.local_ip",
+        "if r then",
+        "  w=r.public_ip",
+        "  s.launch(""/usr/bin/Browser.exe"", r.local_ip+"":8080"")",
+        "  for x in r.used_ports",
+        "    if x.get_lan_ip==l then",
+        "      p.push(x.port_number)",
+        "    end if",
+        "  end for",
+        "end if",
+        "if p.len==0 then",
+        "  p=[""None""]",
+        "end if",
+        "get_custom_object.rsh_res=res",
+        "get_custom_object.rsh_w=w",
+        "get_custom_object.rsh_l=l",
+        "get_custom_object.rsh_p=p.join("","")",
+    ]
+
+    self.tinyRCE(self.focusedObject, stub.join(char(10)))
+    
+    installResult = get_custom_object.rsh_res
+    if installResult != 1 then
+        return print("<color=red>Installation Failed: " + installResult + "</color>")
+    end if
+
+    wanIP = get_custom_object.rsh_w
+    lanIP = get_custom_object.rsh_l
+    openPorts = get_custom_object.rsh_p
+    
+    if wanIP == null then wanIP = "UNKNOWN"
+    if lanIP == null then lanIP = "UNKNOWN"
+    if openPorts == null then openPorts = "UNKNOWN"
+
+    print(char(10) + "<color=#00FFFF>=========================================</color>")
+    print("<color=#84BD00> [RSHELL INSTALLED & STARTED]</color>")
+    print("<color=white>   WAN IP:</color>         <color=#1EFF00>" + wanIP + "</color>")
+    print("<color=white>   Target LAN:</color>     <color=#1EFF00>" + lanIP + "</color>")
+    print("<color=white>   Active Ports:</color>   <color=#1EFF00>" + openPorts + "</color>")
+    print("<color=#00FFFF>=========================================</color>\n")
+
+    rootPass = user_input("<color=orange>Enter the root password to record (or leave blank) ></color> ").trim
+    if rootPass == "" then rootPass = "UNKNOWN"
+
+    dbPath = self.RSHELLS_DB
+    comp = self.originalShell.host_computer
+    
+    if not comp.File(dbPath) then
+        parts = dbPath.split("/")
+        fName = parts.pop
+        dPath = parts.join("/")
+        if dPath == "" then dPath = "/"
+        comp.touch(dPath, fName)
+    end if
+    
+    dbFile = comp.File(dbPath)
+    if dbFile then
+        rawExisting = dbFile.get_content
+        existing = ""
+        if rawExisting != "" then existing = JarvisCrypt.decrypt(rawExisting, self.MASTER_KEY)
+        
+        isDuplicate = false
+        
+        if existing != "" then
+            lines = existing.split(char(10))
+            for line in lines
+                if line == "" then continue
+                parts = line.split("\|")
+                if parts.len >= 2 then
+                    if parts[0] == wanIP and parts[1] == lanIP then
+                        isDuplicate = true
+                        break
+                    end if
+                end if
+            end for
+        end if
+        
+        if isDuplicate then
+            print("<color=orange>[!] Target " + wanIP + " (" + lanIP + ") already exists in database. Skipping duplicate entry.</color>")
+        else
+            if existing != "" then existing = existing + char(10)
+            
+            finalPlainText = existing + wanIP + "|" + lanIP + "|" + openPorts + "|" + rootPass
+            encryptedOutput = JarvisCrypt.encrypt(finalPlainText, self.MASTER_KEY)
+            
+            dbFile.set_content(encryptedOutput)
+            print("<color=green>Target recorded and encrypted to " + dbPath + "</color>")
+        end if
+    end if
+    self.cmd_wlog([])
+end function
+
+Jarvis.rshell_listen = function(args)
+    if typeof(self.focusedObject) != "shell" then
+        return print("<color=red>Requires shell focus to run listener on target.</color>")
+    end if
+
+    print("\n<color=orange>Deploying listener payload to target...</color>")
+    
+    get_custom_object.rsh_shells = null
+    get_custom_object.rsh_err = null
+
+    stub = [
+        "m=include_lib(""/lib/metaxploit.so"")",
+        "if not m then",
+        "  m=include_lib(current_path+""/metaxploit.so"")",
+        "end if",
+        "if not m then",
+        "  get_custom_object.rsh_err=""metaxploit.so not found on target""",
+        "  exit",
+        "end if",
+        "shells=m.rshell_server",
+        "if typeof(shells)==""string"" then",
+        "  get_custom_object.rsh_err=shells",
+        "else",
+        "  get_custom_object.rsh_shells=shells",
+        "end if",
+    ]
+
+    self.tinyRCE(self.focusedObject, stub.join(char(10)))
+    
+    err = get_custom_object.rsh_err
+    if err != null then
+        return print("<color=red>Listen Error: " + err + "</color>")
+    end if
+    
+    shells = get_custom_object.rsh_shells
+    
+    if typeof(shells) == "list" and shells.len > 0 then
+        addedCount = 0
+        deadCount = 0
+        dupCount = 0
+        
+        for s in shells
+            sMeta = self.extractMeta(s) 
+            
+            // Explicitly catch and ignore dead/dropped connections
+            if sMeta.type == "DEAD" or sMeta.info == "LOST" then
+                deadCount = deadCount + 1
+                continue
+            end if
+            
+            isDup = false
+            for i in range(0, self.metaList.len - 1)
+                existMeta = self.metaList[i]
+                if existMeta.pubIP == sMeta.pubIP and existMeta.info == sMeta.info and existMeta.user == sMeta.user then
+                    isDup = true
+                    break
+                end if
+            end for
+            
+            if not isDup then
+                self.track_object(s, sMeta) 
+                addedCount = addedCount + 1
+            else
+                dupCount = dupCount + 1
+            end if
+        end for
+        
+        // Detailed readout of exactly what happened
+        print("\n<b><color=#84BD00>--- Listener Results ---</color></b>")
+        print("<color=white>Total Shells in Queue:</color> " + shells.len)
+        print("<color=#1EFF00>New Unique Targets:</color>    " + addedCount)
+        if dupCount > 0 then print("<color=orange>Duplicate Connections:</color> " + dupCount + " (Ignored)")
+        if deadCount > 0 then print("<color=red>Dead Connections:</color>      " + deadCount + " (Ignored)")
+        
+        if addedCount > 0 then
+            self.focusedIndex = self.objectsObtained.len - 1
+            self.focusedObject = self.objectsObtained[self.focusedIndex]
+            print("\n<color=green>Focus set to newest shell.</color>")
+        end if
+    else
+        print("<color=orange>No shells are currently queued on the target.</color>")
+    end if
+end function
+
+Jarvis.rshell_db = function(args)
+    dbPath = self.RSHELLS_DB
+    comp = self.originalShell.host_computer
+    dbFile = comp.File(dbPath)
+    
+    print("\n<color=#B266FF>--- Recorded RShell Targets ---</color>")
+    if not dbFile or dbFile.get_content == "" then
+        return print("<color=orange>No targets recorded yet. Run 'rshell install' to add one.</color>\n")
+    end if
+    
+    plainText = JarvisCrypt.decrypt(dbFile.get_content, self.MASTER_KEY)
+    
+    lines = plainText.split(char(10))
+    count = 1
+    for line in lines
+        if line == "" then continue
+        parts = line.split("\|") 
+        if parts.len == 4 then
+            print("<color=#00FFFF>[" + count + "] WAN: " + parts[0] + "</color>")
+            print("    <color=#888888>LAN:</color> <color=white>" + parts[1] + "</color>  <color=#888888>|  PORTS:</color> <color=white>" + parts[2] + "</color>")
+            print("    <color=#888888>PASS:</color> <color=#1EFF00>" + parts[3] + "</color>")
+            count = count + 1
+        end if
+    end for
+    print("")
+end function
+
+Jarvis.rshell_queue = function(args)
+    if typeof(self.focusedObject) != "shell" then
+        return print("<color=red>Requires shell focus to access the RShell Server.</color>")
+    end if
+
+    print("\n<color=orange>Fetching connected shells via RCE on Focused Target...</color>")
+    
+    get_custom_object.rsh_shells = null
+    get_custom_object.rsh_err = null
+
+    // TinyRCE stub to pull the connected shell queue from the remote server
+    stub = [
+        "m=include_lib(""/lib/metaxploit.so"")",
+        "if not m then m=include_lib(current_path+""/metaxploit.so"")",
+        "if not m then",
+        "  get_custom_object.rsh_err=""metaxploit.so not found on target""",
+        "  exit",
+        "end if",
+        "shells=m.rshell_server",
+        "if typeof(shells)==""string"" then",
+        "  get_custom_object.rsh_err=shells",
+        "else",
+        "  get_custom_object.rsh_shells=shells",
+        "end if",
+    ]
+
+    self.tinyRCE(self.focusedObject, stub.join(char(10)))
+    
+    err = get_custom_object.rsh_err
+    if err != null then
+        return print("<color=red>Queue Error: " + err + "</color>")
+    end if
+    
+    shells = get_custom_object.rsh_shells
+    
+    if typeof(shells) != "list" or shells.len == 0 then
+        return print("<color=orange>No shells are currently connected to the target's RShell Server.</color>")
+    end if
+    
+    while true
+        if shells.len == 0 then
+            print("\n<color=#aaaaaa>Queue is empty.</color>")
+            break
+        end if
+        
+        print("\n<b><color=#B266FF>--- RShell Connected Devices ---</color></b>")
+        for i in range(0, shells.len - 1)
+            s = shells[i]
+            meta = self.extractMeta(s)
+            print("<color=purple>[" + i + "]</color> <color=white>" + meta.pubIP + "</color> <color=#888888>(" + meta.lanIP + ")</color> @ <color=#F8AB7E>" + meta.user + "</color>")
+        end for
+        
+        print("\n<color=#aaaaaa>Options: [id] to Add to Memory, 'kill [id]' to disconnect, 'add all', 'kill all' (opt: append [proc_name]), or [Enter] to exit.</color>")
+        ui = user_input("<color=yellow>rshell_queue > </color>").trim
+        
+        if ui == "" then break
+        
+        // Parse input to support custom process names
+        parts = ui.split(" ")
+        cmd = parts[0].lower
+        
+        if cmd == "add" and parts.len > 1 and parts[1].lower == "all" then
+            for s in shells
+                self.track_object(s)
+            end for
+            print("<color=#84BD00>SUCCESS: Added " + shells.len + " shells to Jarvis memory.</color>")
+            shells = []
+            continue
+        end if
+        
+        if cmd == "kill" and parts.len > 1 then
+            targetStr = parts[1].lower
+            
+            // Set up our process hunting parameters
+            targetProc = self.RSHELLPROC
+            customName = false
+            if parts.len > 2 then 
+                targetProc = parts[2]
+                customName = true
+            end if
+            
+            if targetStr == "all" then
+                successCount = 0
+                for s in shells
+                    comp = s.host_computer
+                    if not comp then continue // Safe skip if connection naturally dropped
+                    
+                    procs = comp.show_procs.split(char(10))
+                    for pLine in procs
+                        // Match custom proc, OR fallback to rshell_client if no custom name provided
+                        if pLine.indexOf(targetProc) != null or (not customName and pLine.indexOf("rshell_client") != null) then
+                            cols = pLine.split(" ")
+                            cleanCols = []
+                            for c in cols
+                                if c.trim != "" then cleanCols.push(c)
+                            end for
+                            
+                            if cleanCols.len >= 2 then
+                                comp.close_program(cleanCols[1].to_int)
+                                successCount = successCount + 1
+                            end if
+                        end if
+                    end for
+                end for
+                print("<color=#84BD00>SUCCESS: " + successCount + " processes terminated.</color>")
+                shells = []
+                continue
+            else
+                idx = targetStr.to_int
+                if typeof(idx) == "number" and idx >= 0 and idx < shells.len then
+                    s = shells[idx]
+                    comp = s.host_computer
+                    if not comp then
+                        print("<color=red>Shell connection is already dead.</color>")
+                        shells.remove(idx)
+                        continue
+                    end if
+                    
+                    killed = false
+                    procs = comp.show_procs.split(char(10))
+                    
+                    for pLine in procs
+                        if pLine.indexOf(targetProc) != null or (not customName and pLine.indexOf("rshell_client") != null) then
+                            cols = pLine.split(" ")
+                            cleanCols = []
+                            for c in cols
+                                if c.trim != "" then cleanCols.push(c)
+                            end for
+                            
+                            if cleanCols.len >= 2 then
+                                comp.close_program(cleanCols[1].to_int)
+                                killed = true
+                            end if
+                        end if
+                    end for
+                    
+                    if killed then
+                        print("<color=#84BD00>Terminated process on " + comp.public_ip + "</color>")
+                    else
+                        print("<color=red>Failed to find/kill process on " + comp.public_ip + ". Try specifying the exact name: kill " + idx + " [process_name]</color>")
+                    end if
+                    shells.remove(idx)
+                else
+                    print("<color=red>Invalid ID.</color>")
+                end if
+                continue
+            end if
+        end if
+        
+        idx = ui.to_int
+        if typeof(idx) == "number" and idx >= 0 and idx < shells.len then
+            s = shells[idx]
+            self.track_object(s)
+            print("<color=#84BD00>Shell [" + idx + "] added to Jarvis memory.</color>")
+            shells.remove(idx)
+        else
+            print("<color=red>Invalid input.</color>")
+        end if
+    end while
+end function
+
+Jarvis.deployTrojanPS = function(ip, port, hackshop="", processName="")
+    if hackshop == "" then hackshop = Jarvis.HACKSHOP
+    if processName == "" then processName = Jarvis.RSHELLPROC
+    
+    if typeof(self.focusedObject) != "shell" then
+        return print("Error: focusedObject is not a valid shell.")
+    end if
+    
+    myShell = self.focusedObject
+    myComp = myShell.host_computer
+    
+    binDir = myComp.File("/bin")
+    psFile = myComp.File("/bin/ps")
+    
+    if not binDir or not binDir.has_permission("w") then
+        return print("Error: Insufficient privileges on /bin. Need write access.")
+    end if
+    if psFile and not psFile.has_permission("w") then
+        return print("Error: Insufficient privileges on /bin/ps. Need write access.")
+    end if
+    
+    print("Preparing payload for " + ip + ":" + port + "...")
+    
+    C = char(10)
+    payload = "R=""" + ip + """" + C
+    payload = payload + "P=" + port + C
+    payload = payload + "H=""" + hackshop + """" + C
+    payload = payload + "N=""" + processName + """" + C
+    
+    payload = payload + "m=include_lib(""/lib/metaxploit.so"")" + C
+    payload = payload + "if not m then" + C
+    payload = payload + "a=include_lib(""/lib/aptclient.so"")" + C
+    payload = payload + "a.add_repo(H)" + C
+    payload = payload + "a.update" + C
+    payload = payload + "a.install(""metaxploit.so"")" + C
+    payload = payload + "a.del_repo(H)" + C
+    payload = payload + "m=include_lib(""/lib/metaxploit.so"")" + C
+    payload = payload + "clear_screen" + C
+    payload = payload + "c=get_shell.host_computer;d=c.get_name;v=d+"":""+current_path+""$""" + C
+    payload = payload + "if active_user==""root"" then v=d+"":""+current_path+""#""" + C
+    payload = payload + "if current_path.indexOf(home_dir)!=null then v=d+"":~""+current_path.replace(home_dir,"""")+""$""" + C
+    payload = payload + "print(active_user+""@""+v+"" ps"")" + C
+    payload = payload + "end if" + C
+    payload = payload + "if m then m.rshell_client(R,P,N)" + C
+    payload = payload + "c=get_shell.host_computer" + C
+    payload = payload + "for l in c.show_procs.split(char(10))" + C
+    payload = payload + "if l.split("" "")[4]!=N then print(format_columns(l))" + C
+    payload = payload + "end for" + C
+    
+    myComp.touch("/bin", ".ps_tmp.src")
+    srcFile = myComp.File("/bin/.ps_tmp.src")
+    
+    if not srcFile then return print("Error: Failed to create hidden source file in /bin.")
+    
+    srcFile.set_content(payload)
+    
+    print("Compiling trojanized ps on target...")
+    buildError = myShell.build("/bin/.ps_tmp.src", "/bin")
+    if buildError != "" then return print("Compile Error: " + buildError)
+    
+    srcFile.delete
+    
+    compiledBinary = myComp.File("/bin/.ps_tmp")
+    if not compiledBinary then return print("Error: Compiled binary not found.")
+    err = compiledBinary.move("/bin", "ps")
+    if typeof(err) == "string" then return print("Error moving file: " + err)
+    
+    newPs = myComp.File("/bin/ps")
+    if newPs then newPs.chmod("u+x", 0)
+    
+    print("<color=#42DB91>Success: Remote /bin/ps has been replaced with the trojan!...</color>")
+    wait(1)
+    self.focusedObject.launch("/usr/bin/Terminal.exe","/bin/ps")
+end function
+
+Jarvis.get_p0 = function(rLib, targetRouter = null, huntShell = true)
+    exploitPairs = self.get_exploits(rLib)
+    foundShell = null
+    bRes = null
+    
+    ck = rLib.lib_name + " " + rLib.version
+    bDList = self.loadCache(self.BOUNCE_CACHE)
+    bD = {}
+    if typeof(bDList) == "list" and bDList.len > 0 and typeof(bDList[0]) == "map" then bD = bDList[0]
+    
+    if bD.hasIndex(ck) and typeof(bD[ck]) == "map" then 
+        bRes = [bD[ck].mem, bD[ck].vuln]
+    end if
+    
+    if not huntShell and bRes != null then return {"shell": null, "bounce": bRes}
+    
+    testIP = null
+    if targetRouter != null then
+        for ip in targetRouter.devices_lan_ip
+            if ip != targetRouter.local_ip then 
+                testIP = ip
+                break
+            end if
+        end for
+    end if
+    
+    for mem in exploitPairs.indexes
+        for v in exploitPairs[mem]
+            if not huntShell and bRes != null then break
+            
+            res = rLib.overflow(mem, v)
+            if huntShell and typeof(res) == "shell" and foundShell == null then 
+                foundShell = res 
+                print("<color=#84BD00>[!] Shell obtained on Port 0.</color>")
+            end if
+            
+            if bRes == null and testIP != null then
+                bounceTest = rLib.overflow(mem, v, testIP)
+                if typeof(bounceTest) == "computer" then
+                    bRes = [mem, v]
+                    bD[ck] = {"mem": mem, "vuln": v}
+                    self.saveCache(self.BOUNCE_CACHE, bD, 1)
+                    print("<color=yellow>[!] Bounce Exploit Verified & Cached: " + mem + "/" + v + "</color>")
+                end if
+            end if
+            
+            if (not huntShell or foundShell != null) and (bRes != null) then break
+        end for
+        if (not huntShell or foundShell != null) and (bRes != null) then break
+    end for
+    
+    if bRes == null and not bD.hasIndex(ck) then
+        bD[ck] = "none"
+        self.saveCache(self.BOUNCE_CACHE, bD, 1)
+    end if
+    
+    return {"shell": foundShell, "bounce": bRes}
+end function
+
+Jarvis.cmd_show_objs = function(args)
+    print("\n<color=#B266FF>--- Objects in Memory ---</color>")
+    
+    total_objs = self.objectsObtained.len
+    if total_objs == 0 then 
+        print("No objects in memory.")
+    else
+        limit = total_objs 
+        if args != null and args.len > 0 then limit = args[0].to_int
+        
+        loop_range = []
+        if limit > 0 then
+            stop_idx = limit - 1
+            if stop_idx >= total_objs then stop_idx = total_objs - 1
+            loop_range = range(0, stop_idx)
+        else if limit < 0 then
+            num_items = 0 - limit
+            if num_items > total_objs then num_items = total_objs
+            loop_range = range(total_objs - 1, total_objs - num_items, -1) 
+        end if
+        
+        for i in loop_range
+            obj = self.objectsObtained[i]
+            meta = self.metaList[i]
+            haveRoot = ""
+            if typeof(self.rootNetworks) == "map" and self.rootNetworks.hasIndex(meta.pubIP) then haveRoot = "<color=yellow>%</color>"
+            print("<color=purple>["+i+"] - </color><color=white>" + meta.type + "</color><color=purple>(" + meta.user + ") - " + meta.info + haveRoot)
+        end for
+    end if
+end function
+
+Jarvis.cmd_show_objs_focus = function(args)
+    self.cmd_show_objs(args)
+    ui = user_input("\nEnter a number to Focus or press Enter to exit > ").trim
+    if ui != "" then
+        self.cmd_focus([ui])
+    end if
+end function
+
+Jarvis.cmd_focus = function(args)
+    if args.len == 0 then return print("<color=red>Usage: focus [id] OR focus me</color>")
+    
+    target = args[0].lower
+    if target == "me" then
+        self.focusedIndex = 0
+        self.focusedObject = self.objectsObtained[0]
+        print("<color=green>Focus set to local machine.</color>")
+        return
+    end if
+    
+    idx = target.to_int
+    if typeof(idx) != "number" or (idx == 0 and target != "0") then return print("<color=red>Invalid input: Must be a numeric ID or 'me'.</color>")
+    
+    abs_idx = idx
+    if idx < 0 then abs_idx = self.objectsObtained.len + idx
+    
+    if not self.objectsObtained.hasIndex(abs_idx) then return print("<color=red>Invalid object ID. Index out of bounds.</color>")
+    
+    self.focusedIndex = abs_idx
+    self.focusedObject = self.objectsObtained[abs_idx]
+    
+    meta = self.metaList[abs_idx]
+    print("<color=green>Focus updated to: [" + abs_idx + "] " + meta.type + " (" + meta.user + ")</color>")
+    
+    if meta.type == "string" then
+        ui = user_input("<color=yellow>Manual Overflow on string. Enter additional string (LANIP/PASSWORD/ETC) if desired: </color>").trim
+        extra = ui
+        
+        combo = self.focusedObject.split("=")
+        if combo.len != 2 then return print("<color=red>SHAUN DEBUG - SPLIT INCORRECTLY: Object doesn't match 'mem|vuln=result' format.</color>")
+        
+        parts = combo[0].split("\|")
+        if parts.len != 2 then return print("<color=red>Error: Could not extract Memory Address and Vuln Key.</color>")
+        
+        ui = user_input("target [lib] or [ip]? ").trim.lower
+        
+        if ui == "lib" then
+            i = 0
+            libfiles = get_shell.host_computer.File("/lib").get_files
+            for each in libfiles
+                print("[" + i + "] - " + each.name)
+                i = i + 1
+            end for
+            ui2 = user_input("Which library **NOTE THIS IS ON THE LOCAL SHELL **- ").trim.to_int
+            
+            if typeof(ui2) != "number" or not libfiles.hasIndex(ui2) then return print("<color=red>Invalid library choice.</color>")
+            
+            mLib = self.metax.load(libfiles[ui2].path)
+            if typeof(mLib) != "MetaLib" then return print("<color=red>Failed to load local MetaLib.</color>")
+            
+        else if ui == "ip" then
+            ui2 = user_input("[ip address] [port] > ").trim.lower
+            ui2 = ui2.split(" ")
+            if ui2.len != 2 then return print("<color=red>Invalid, aborting</color>")
+            
+            netSession = self.metax.net_use(ui2[0], ui2[1].to_int)
+            if not netSession then return print("<color=red>Failed to establish NetSession.</color>")
+            
+            mLib = netSession.dump_lib
+            
+            if typeof(mLib) != "MetaLib" then return print("<color=red>Failed to dump MetaLib from remote.</color>")
+            
+        else
+            return print("<color=red>Invalid choice, aborting</color>")
+        end if
+        
+        result = self.manualOF(mLib, parts[0], parts[1], extra)
+        self.track_object(result)
+        print("\n<color=green>Result Added to Objects: </color>" + result)
+    end if
+end function
+
+Jarvis.cmd_su = function(args)
+    if typeof(self.focusedObject) != "shell" then
+        print("<color=red>Requires shell focus.</color>")
+        return 
+    end if
+
+    fMeta = self.metaList[self.focusedIndex]
+    pubip = fMeta.pubIP
+    
+    if args.len == 0 and self.rootNetworks != null and self.rootNetworks.hasIndex(pubip) then 
+        print("<b>FOUND ROOT PASSWORD IN DB, trying it</b>")
+        args = [self.rootNetworks[pubip]]
+    end if
+
+    get_custom_object.tinyRCE = null 
+    get_custom_object.MCPass = null
+    
+    if args.len == 0 then
+        print("\n<color=orange>Attempting to bruteforce root on Focused Object...</color>")
+        get_custom_object.tinyRCE = self.crack
+        stub = [
+            "c = get_custom_object.tinyRCE",
+            "print ""Running crack via RCE...""",
+            "result = c.crack",
+            "if typeof(result) != ""shell"" then exit(print(result))",
+            "get_custom_object.tinyRCE = result",
+            "exit",
+        ]
+    else
+        password = args[0]
+        print("\n<color=orange>Attempting to elevate with password: " + password + "...</color>")
+        stub = [
+            "newShell = get_shell(""root"", """ + password + """)",
+            "if typeof(newShell) == ""shell"" then",
+            "   get_custom_object.tinyRCE = newShell",
+            "else",
+            "   get_custom_object.tinyRCE = ""Failed: Invalid password or lacking permissions.""",
+            "end if",
+        ]
+    end if
+
+    self.tinyRCE(self.focusedObject, stub.join(char(10)))
+    result = get_custom_object.tinyRCE
+   
+    if typeof(result) == "shell" then
+        targetPub = result.host_computer.public_ip
+        targetLan = result.host_computer.local_ip
+        idx = null
+        
+        for i in range(0, self.objectsObtained.len - 1)
+            if typeof(self.objectsObtained[i]) == "shell" then
+                if self.metaList[i].pubIP == targetPub and self.metaList[i].lanIP == targetLan then
+                    idx = i
+                    break
+                end if
+            end if
+        end for
+        
+        if idx != null then
+            self.objectsObtained[idx] = result
+            self.metaList[idx] = self.extractMeta(result) 
+            if idx == self.focusedIndex then self.focusedObject = result
+        else
+            self.track_object(result)
+            self.focusedIndex = self.objectsObtained.len - 1
+            self.focusedObject = self.objectsObtained[self.focusedIndex]
+        end if
+
+        if args.len > 0 and not self.rootNetworks.hasIndex(pubip) then 
+            self.rootNetworks[pubip] = args[0]
+            self.saveCache(self.ROOTNETWORKS_DB,self.rootNetworks,1)
+        else if get_custom_object.MCPass != null then 
+            self.rootNetworks[pubip] = get_custom_object.MCPass
+            self.saveCache(self.ROOTNETWORKS_DB,self.rootNetworks,1)
+        end if
+        print("<color=#84BD00>SUCCESS: Root shell added to memory and set as Focus!</color>")
+    else if typeof(result) == "string" then
+        print("<color=red>" + result + "</color>")
+    else
+        print("<color=red>Execution failed or returned null.</color>")
+    end if
+end function
+
+Jarvis.cmd_proxy = function(args)
+    if typeof(self.focusedObject) != "shell" then return print("<color=red>Requires shell focus to proxy.</color>")
+    
+    meta = self.metaList[self.focusedIndex]
+    
+    // Changed node type from CLONE to PROXY
+    self.bounceChain.push({"type": "PROXY", "pubIP": meta.pubIP, "lanIP": meta.lanIP, "user": meta.user, "shell":self.focusedObject})
+    
+    self.libStack.push({"m": self.metax, "c": self.crypto, "a": self.APTCLIENT, "cln": self.clone})
+    if self.focusedObject.host_computer.File("/lib/aptclient.so") == null then self.originalShell.scp("/lib/aptclient.so", "/lib", self.focusedObject)
+    get_custom_object.tinyRCE = self
+    
+    stub = [
+        "hoppedinst = new get_custom_object.tinyRCE",
+        "hoppedinst.getLocalLibs", 
+        "hoppedinst.crypto = hoppedinst.libStack[hoppedinst.libStack.len - 1].c",
+        "hoppedinst.clone = true", 
+        "hoppedinst.main",
+        "get_custom_object.tinyRCE = hoppedinst",
+    ]
+    
+    print("<color=#BD0000>Deploying Jarvis Proxy to " + meta.pubIP + "...</color>")
+    self.tinyRCE(self.focusedObject, stub.join(char(10)))
+    self.objectsObtained = get_custom_object.tinyRCE.objectsObtained
+    self.metaList = get_custom_object.tinyRCE.metaList
+    
+    prevLibs = self.libStack.pop
+    self.metax = prevLibs.m
+    self.crypto = prevLibs.c
+    self.APTCLIENT = prevLibs.a
+    self.clone = prevLibs.cln 
+    
+    self.bounceChain.pop
+    
+    print("<color=#BD0000>Proxy terminated. Resuming previous context...</color>")
+end function
+
+Jarvis.cmd_sift = function(args)
+    if self.focusedObject == null then
+        return print("<color=red>No object focused. Use 'focus [id]' first.</color>")
+    end if
+    
+    print("\n<color=#B266FF>Initiating filesystem sift...</color>")
+    self.filePivot(self.focusedObject)
+    print("<color=green>Sift complete.</color>")
+end function
+
+Jarvis.cmd_scan = function(args)
+    ip = ""
+    port = 0
+
+    if args.len < 2 then 
+        ip = user_input("Target IP > ").trim
+        port = user_input("Target Port > ").trim.to_int
+    else
+        ip = args[0]
+        port = args[1].to_int
+    end if
+	
+    if typeof(port) != "number" or not is_valid_ip(ip) then return print("<color=red>Invalid IP or Port format.</color>")
+	
+    if get_shell.ping(ip) == 1 then
+        print("\n<color=#aaaaaa>Attempting direct IP scan on " + ip + ":" + port + "...</color>")
+        mLib = self.IPScanner(ip, port)
+        
+        if typeof(mLib) != "MetaLib" then return print("<color=red>Scan failed. Could not dump MetaLib.</color>")
+        
+        result = self.process_metaLib(mLib)
+    else
+        return print("<color=red>Cannot ping IP from current shell. Try hopping or cloning into the network first.</color>")
+    end if
+	
+    if typeof(result) == "list" then
+        for o in result
+            self.track_object(o)
+        end for
+        print("<color=green>Scan complete. Found <color=white>" + result.len + "</color> objects.</color>")
+        
+        if result.len > 0 then self.cmd_show_objs_focus(["-" + result.len])
+    else
+        print(result) 
+    end if
+end function
+
+Jarvis.cmd_ls = function(args)
+    objtype = typeof(self.focusedObject)
+    if objtype == "shell" or objtype == "computer" or objtype == "file" then 
+        self.explore.start(self.focusedObject,self.originalShell)
+    else 
+        print("<color=red>Requires shell or computer focus.</color>")
+    end if
+end function
+
+Jarvis.cmd_bash = function(args)
+    if typeof(self.focusedObject) == "shell" then 
+        self.focusedObject.launch("/usr/bin/Terminal.exe")
+    else 
+        print("<color=red>Requires shell focus.</color>")
+    end if
+end function
+
+Jarvis.cmd_drop = function(args)
+    self.cmd_show_objs
+    if args.len == 0 then args = [user_input("Remove [all], [clean] (keep shells), or [id/range]? ").trim.lower]
+    
+    if args[0] == "all" then
+        confirm = user_input("Are you sure you want to drop ALL objects except your active trace? (y/n): ")
+        if confirm.lower != "y" and confirm.lower != "yes" then return print("<color=orange>Drop all aborted.</color>")
+
+        traceIPs = {}
+        if self.bounceChain.len > 0 then
+            for node in self.bounceChain
+                traceIPs[node.pubIP + "|" + node.lanIP] = true
+            end for
+        end if
+        
+        newMemoryList = []
+        newMetaList = []
+        seenIPs = {} 
+        
+        for i in range(0, self.objectsObtained.len - 1)
+            obj = self.objectsObtained[i]
+            meta = self.metaList[i]
+            if typeof(obj) == "shell" then
+                ipKey = meta.pubIP + "|" + meta.lanIP
+                if traceIPs.hasIndex(ipKey) and not seenIPs.hasIndex(ipKey) then
+                    seenIPs[ipKey] = true
+                    newMemoryList.push(obj)
+                    newMetaList.push(meta)
+                end if
+            end if
+        end for
+        
+        self.objectsObtained = newMemoryList
+        self.metaList = newMetaList
+        
+        if self.objectsObtained.len > 0 then
+            self.focusedIndex = self.objectsObtained.len - 1
+            self.focusedObject = self.objectsObtained[self.focusedIndex]
+        else
+            self.focusedIndex = 0
+            self.focusedObject = get_shell 
+            self.track_object(get_shell)
+        end if
+        return print("<color=#84BD00>Memory wiped. Active bounce chain safely preserved and focused!</color>")
+    end if
+    
+    if args[0] == "clean" then
+        newMemoryList = []
+        newMetaList = []
+        seenIPs = {} 
+        droppedCount = 0
+        
+        focusIPKey = ""
+        if typeof(self.focusedObject) == "shell" then
+            focusIPKey = self.metaList[self.focusedIndex].pubIP + "|" + self.metaList[self.focusedIndex].lanIP
+        end if
+        
+        focusRestored = false
+
+        for i in range(0, self.objectsObtained.len - 1)
+            obj = self.objectsObtained[i]
+            meta = self.metaList[i]
+            if typeof(obj) == "shell" then
+                ipKey = meta.pubIP + "|" + meta.lanIP
+                if not seenIPs.hasIndex(ipKey) then
+                    seenIPs[ipKey] = true
+                    newMemoryList.push(obj)
+                    newMetaList.push(meta)
+                    
+                    if ipKey == focusIPKey and not focusRestored then
+                        self.focusedIndex = newMemoryList.len - 1
+                        self.focusedObject = obj
+                        focusRestored = true
+                    end if
+                else
+                    droppedCount = droppedCount + 1 
+                end if
+            else
+                droppedCount = droppedCount + 1 
+            end if
+        end for
+        
+        self.objectsObtained = newMemoryList
+        self.metaList = newMetaList
+        
+        if not focusRestored then
+            print("<color=orange>Focused object was junked. Focus reset to local machine.</color>")
+            self.focusedIndex = 0
+            self.focusedObject = self.objectsObtained[0] 
+        end if
+        return print("<color=#84BD00>Clean complete! Dropped " + droppedCount + " objects (junk and duplicate shells).</color>")
+    end if
+    
+    targetArg = str(args[0])
+    
+    if targetArg.indexOf("-") != null and targetArg.indexOf("-") > 0 then
+        parts = targetArg.split("-")
+        if parts.len != 2 then return print("<color=red>Invalid range format. Use Start-End (e.g., 2-5).</color>")
+        
+        startIdx = parts[0].to_int
+        endIdx = parts[1].to_int
+        
+        if typeof(startIdx) != "number" or typeof(endIdx) != "number" then return print("<color=red>Invalid range numbers.</color>")
+        if startIdx > endIdx then
+            tmp = startIdx
+            startIdx = endIdx
+            endIdx = tmp
+        end if
+        if startIdx < 0 or endIdx >= self.objectsObtained.len then return print("<color=red>Range out of bounds.</color>")
+        
+        droppedCount = 0
+        for i in range(endIdx, startIdx, -1)
+            if self.focusedIndex == i then
+                print("<color=orange>Dropped focused object. Focus reset to local machine.</color>")
+                self.focusedIndex = 0
+                self.focusedObject = self.objectsObtained[0]
+            else if i < self.focusedIndex then
+                self.focusedIndex = self.focusedIndex - 1
+            end if
+            
+            self.objectsObtained.remove(i)
+            self.metaList.remove(i)
+            droppedCount = droppedCount + 1
+        end for
+        return print("<color=green>Dropped " + droppedCount + " objects from memory.</color>")
+    end if
+
+    idx = targetArg.to_int
+    if typeof(idx) != "number" then return print("<color=red>Invalid object ID format.</color>")
+    
+    abs_idx = idx
+    if idx < 0 then abs_idx = self.objectsObtained.len + idx
+    if not self.objectsObtained.hasIndex(abs_idx) then return print("<color=red>Invalid object ID. Index out of bounds.</color>")
+    
+    if self.focusedIndex == abs_idx then
+        print("<color=orange>Dropping focused object. Focus reset to local machine.</color>")
+        self.focusedIndex = 0
+        self.focusedObject = self.objectsObtained[0]
+    else if abs_idx < self.focusedIndex then
+        self.focusedIndex = self.focusedIndex - 1
+    end if
+    
+    droppedMeta = self.metaList[abs_idx]
+    self.objectsObtained.remove(abs_idx)
+    self.metaList.remove(abs_idx)
+    
+    print("<color=green>Dropped " + droppedMeta.type + " (" + droppedMeta.user + ") from memory.</color>")
+end function
+
+Jarvis.cmd_wlog = function(args)
+    targets = []
+    
+    if args and args.len > 0 and args[0].lower == "all" then
+        print("\n<color=orange>Scanning memory for Root shells to wipe...</color>")
+        
+        for i in range(0, self.objectsObtained.len - 1)
+            if typeof(self.objectsObtained[i]) == "shell" then
+                if self.metaList[i].user == "root" then
+                    targets.push(self.objectsObtained[i])
+                end if
+            end if
+        end for
+        
+        if targets.len == 0 then return print("<color=red>No root shells found in memory to wipe.</color>")
+        print("Found <color=white>" + targets.len + "</color> root shells. Initiating mass wipe...")
+        
+    else
+        if self.focusedObject == null then
+            return print("<color=red>No object focused. Use 'focus [id]' first.</color>")
+        end if
+        targets.push(self.focusedObject)
+        print("\n<color=orange>Attempting to wipe and corrupt system.log on Focus...</color>")
+    end if
+    
+    successCount = 0
+    
+    for target in targets
+        type = typeof(target)
+        comp = target
+        if type == "shell" then comp = target.host_computer
+        
+        if type != "shell" and type != "computer" then continue
+        
+        ipLabel = comp.public_ip + " (" + comp.local_ip + ")"
+        
+        logFile = comp.File("/var/system.log")
+        if not logFile then 
+            print("<color=red>[" + ipLabel + "] Error: /var/system.log not found.</color>")
+            continue
+        end if
+        
+        if not logFile.has_permission("w") then 
+            print("<color=red>[" + ipLabel + "] Error: Missing write permission on system.log.</color>")
+            continue
+        end if
+        
+        targetDir = ""
+        scanQueue = [comp.File("/")]
+        while scanQueue.len > 0
+            currentDir = scanQueue.pull
+            if currentDir != null and currentDir.has_permission("w") then 
+                targetDir = currentDir.path
+                break
+            end if
+            if currentDir != null then scanQueue = scanQueue + currentDir.get_folders
+        end while
+        
+        if targetDir == "" then
+            print("<color=orange>[" + ipLabel + "] Error: Could not find any writable directory to generate temp file.</color>")
+            continue
+        end if
+        
+        comp.touch(targetDir, "tmp_log.txt")
+        tmp = comp.File(targetDir + "/tmp_log.txt")
+        
+        if tmp then
+            err = tmp.move("/var", "system.log")
+            if typeof(err) == "string" and err != "" then
+                print("<color=red>[" + ipLabel + "] Failed to move file: " + err + "</color>")
+            else
+                print("<color=#84BD00>[" + ipLabel + "] SUCCESS: Log wiped and corrupted!</color>")
+                successCount = successCount + 1
+            end if
+        else
+            print("<color=red>[" + ipLabel + "] Error: Could not create tmp_log.txt in " + targetDir + ".</color>")
+        end if
+    end for
+    
+    if args and args.len > 0 and args[0].lower == "all" then
+        print("\n<color=#aaaaaa>Mass Wipe Complete. Successful: " + successCount + "/" + targets.len + "</color>")
+    end if
+end function
+
+Jarvis.cmd_scanlan = function(args)
+    if typeof(self.focusedObject) != "shell" then
+        return print("<color=red>Requires shell focus to upload and execute binaries.</color>")
+    end if
+
+    origComp = self.originalShell.host_computer
+    targetShell = self.focusedObject
+    targetComp = targetShell.host_computer
+
+    srcPath = "/usr/bin/ScanLan.exe"
+    if not origComp.File(srcPath) then
+        return print("<color=red>Error: ScanLan.exe not found in /usr/bin/ on your Origin Host.</color>")
+    end if
+
+    print("\n<color=orange>Finding RWX drop zone on target...</color>")
+
+    targetDir = ""
+    scanQueue = [targetComp.File("/")]
+    while scanQueue.len > 0
+        currentDir = scanQueue.pull
+        if currentDir != null and currentDir.has_permission("r") and currentDir.has_permission("w") and currentDir.has_permission("x") then
+            targetDir = currentDir.path
+            break
+        end if
+        if currentDir != null then scanQueue = scanQueue + currentDir.get_folders
+    end while
+
+    if targetDir == "" then return print("<color=red>Error: No writable directory found on target.</color>")
+    print("Drop zone secured: <color=white>" + targetDir + "</color>")
+    print("Uploading ScanLan.exe...")
+
+    err = self.originalShell.scp(srcPath, targetDir, targetShell)
+    if typeof(err) == "string" then return print("<color=red>Upload failed: " + err + "</color>")
+
+    destPath = targetDir + "/ScanLan.exe"
+    if not targetComp.File(destPath) then return print("<color=red>Upload failed: File not found on target.</color>")
+
+    print("<color=#84BD00>Executing remote ScanLan...</color>\n")
+    targetShell.launch(destPath)
+
+    print("\n<color=#aaaaaa>Cleaning up trace files...</color>")
+    targetComp.File(destPath).delete
+
+    print("<color=green>ScanLan complete and wiped from target.</color>")
+end function
+
+Jarvis.cmd_launch = function(args)
+    if typeof(self.focusedObject) != "shell" then
+        return print("<color=red>Requires shell focus to launch binaries.</color>")
+    end if
+
+    if args.len == 0 then
+        return print("<color=red>Usage: launch [binary_name] [optional: args...]</color>")
+    end if
+
+    targetShell = self.focusedObject
+    comp = targetShell.host_computer
+    
+    rawBin = args.pull 
+    binArgs = args.join(" ") 
+    
+    meta = self.metaList[self.focusedIndex]
+    homeDir = "/home/" + meta.user
+    if meta.user == "root" then homeDir = "/root"
+    
+    searchPaths = [
+        rawBin,                 
+        "/bin/" + rawBin,       
+        "/usr/bin/" + rawBin,   
+        homeDir + "/" + rawBin,  
+    ]
+    
+    validPath = ""
+    for path in searchPaths
+        fileCheck = comp.File(path)
+        if fileCheck != null and not fileCheck.is_folder then
+            validPath = path
+            break
+        end if
+    end for
+    
+    if validPath == "" then
+        return print("<color=red>Launch Error: '" + rawBin + "' not found in /bin, /usr/bin, or " + homeDir + ".</color>")
+    end if
+
+    print("\n<color=orange>Executing " + validPath + " on target...</color>\n")
+    
+    if binArgs != "" then
+        err = targetShell.launch(validPath, binArgs)
+    else
+        err = targetShell.launch(validPath)
+    end if
+    
+    if typeof(err) == "string" and err != "" then
+        print("<color=red>Launch Failed: " + err + "</color>")
+    end if
+end function
+
+Jarvis.cmd_dc = function(args)
+	if args.len == 0 then return print("<color=red>Usage: dc [MD5_HASH]</color>")
+    
+    subCmd = args.pull.lower
+    if subCmd.len == 32 then 
+        result = self.crypto.decipher(subCmd)
+		if result == null then return print("<color=red>Could not decipher MD5: </color>" + subCmd)
+		print("<color=green>Cracked: </color>" + result)
+    else 
+        print("<color=red>Invalid MD5 hash format.</color>")
+    end if
+end function
+
+Jarvis.cmd_troj = function(args)
+	if typeof(self.focusedObject) != "shell" then
+        return print("<color=red>Requires shell focus to upload trojan</color>")
+    end if
+    self.rshell_db()
+    ui = user_input("\nEnter parameters: [RShell Server] [Port] > ").trim.split(" ")
+	
+    if ui.len < 2  then return print("<color=red>Must enter Rshell server IP + Port")
+    if is_valid_ip( ui[0]) == 0 or typeof(ui[1].to_int) != "number" then return print("Invalid IP or Port")
+    self.deployTrojanPS(ui[0],ui[1])
+    self.cmd_wlog
+end function
+
+Jarvis.cmd_rshell = function(args)
+    if args.len == 0 then
+        return print("<color=red>Usage: rshell [install/start/stop/listen/db/queue]</color>")
+    end if
+    
+    subCmd = args.pull.lower
+    
+    if subCmd == "install" then
+        self.rshell_install(args)
+    else if subCmd == "listen" then
+        self.rshell_listen(args)
+    else if subCmd == "db" then
+        self.rshell_db(args)
+    else if subCmd == "queue" then
+        self.rshell_queue(args)
+    else
+        print("<color=red>Unknown rshell command: " + subCmd + "</color>")
+    end if
+end function
+
+Jarvis.cmd_deepmap = function(args)
+    if typeof(self.focusedObject) != "shell" then
+        return print("<color=red>Requires shell focus to perform deep network map.</color>")
+    end if
+
+    print("\n<color=orange>Deploying Self-Aware Tree Mapper via RCE on Focused Shell...</color>")
+
+    stub = [
+        "output = []",
+        "mapped_ips = []",
+        "my_ip = get_shell.host_computer.local_ip",
+        "scan_node = function(router_obj, depth)",
+        "  if not router_obj then return",
+        "  ips = router_obj.devices_lan_ip",
+        "  if typeof(ips) != ""list"" then return",
+        "  devices = []",
+        "  switches = []",
+        "  for ip in ips",
+        "    if mapped_ips.indexOf(ip) != null then continue",
+        "    mapped_ips.push(ip)",
+        "    ports = router_obj.device_ports(ip)",
+        "    open_p = []",
+        "    closed_p = []",
+        "    if typeof(ports) == ""list"" then",
+        "      for p in ports",
+        "        if p.is_closed then closed_p.push(p.port_number) else open_p.push(p.port_number)",
+        "      end for",
+        "    end if",
+        "    p_str = """"",
+        "    if open_p.len > 0 then p_str = ""<color=#1EFF00>O:"" + open_p.join("","") + ""</color> """,
+        "    if closed_p.len > 0 then p_str = p_str + ""<color=#888888>C:"" + closed_p.join("","") + ""</color>""",
+        "    if p_str == """" then p_str = ""<color=#888888>None</color>""",
+        "    p_str = p_str.trim",
+        "    ftag = """"",
+        "    if ip == my_ip then ftag = "" <color=#FF5E00><*FOCUS*></color>""",
+        "    sub_r = get_router(ip)",
+        "    if typeof(sub_r) == ""router"" then",
+        "      fw = sub_r.firewall_rules",
+        "      fw_tag = """"",
+        "      if typeof(fw) == ""list"" and fw.len > 0 then fw_tag = ""<color=red>[FW]</color> """,
+        "      ker = sub_r.kernel_version",
+        "      wifi = sub_r.essid_name",
+        "      wifi_tag = """"",
+        "      if wifi then wifi_tag = ""<color=#00FFFF>[WiFi: "" + wifi + ""]</color> """,
+        "      switches.push({""ip"": ip, ""ports"": p_str, ""r"": sub_r, ""fw_tag"": fw_tag, ""ker"": ker, ""wifi"": wifi_tag, ""fw_rules"": fw, ""ftag"": ftag})",
+        "    else",
+        "      devices.push({""ip"": ip, ""ports"": p_str, ""ftag"": ftag})",
+        "    end if",
+        "  end for",
+        "  for d in devices",
+        "    output.push(depth + ""|-- <color=white>[DEVICE]</color> "" + d.ip + d.ftag + "" ("" + d.ports + "")"")",
+        "  end for",
+        "  for s in switches",
+        "    output.push(depth + ""|-- <color=orange>[SWITCH]</color> "" + s.fw_tag + s.wifi + s.ip + s.ftag + "" <color=#aaaaaa>(v"" + s.ker + "")</color> ("" + s.ports + "")"")",
+        "    if typeof(s.fw_rules) == ""list"" then",
+        "      for rule in s.fw_rules",
+        "        output.push(depth + ""    |-- <color=#ff5555>[RULE]</color> <color=#aaaaaa>"" + rule + ""</color>"")",
+        "      end for",
+        "    end if",
+        "    scan_node(s.r, depth + ""    "")",
+        "  end for",
+        "end function",
+        "top_router = get_router",
+        "if typeof(top_router) == ""router"" then",
+        "  mapped_ips.push(top_router.local_ip)",
+        "  fw = top_router.firewall_rules",
+        "  fw_tag = """"",
+        "  if typeof(fw) == ""list"" and fw.len > 0 then fw_tag = ""<color=red>[FW]</color> """,
+        "  wifi = top_router.essid_name",
+        "  wifi_tag = """"",
+        "  if wifi then wifi_tag = ""<color=#00FFFF>[WiFi: "" + wifi + ""]</color> """,
+        "  ftag = """"",
+        "  if top_router.local_ip == my_ip then ftag = "" <color=#FF5E00><*FOCUS*></color>""",
+        "  output.push(""<color=#00A8A8>[ROUTER]</color> "" + fw_tag + wifi_tag + top_router.public_ip + "" / "" + top_router.local_ip + ftag + "" <color=#aaaaaa>(v"" + top_router.kernel_version + "")</color>"")",
+        "  if typeof(fw) == ""list"" then",
+        "    for rule in fw",
+        "      output.push(""  |-- <color=#ff5555>[RULE]</color> <color=#aaaaaa>"" + rule + ""</color>"")",
+        "    end for",
+        "  end if",
+        "  scan_node(top_router, ""  "")",
+        "else",
+        "  output.push(""<color=red>Error: Could not resolve top-level router.</color>"")",
+        "end if",
+        "get_custom_object.deepmap_result = output.join(char(10))",
+    ]
+
+    get_custom_object.deepmap_result = null
+    self.tinyRCE(self.focusedObject, stub.join(char(10)))
+    
+    result = get_custom_object.deepmap_result
+    if result then
+        print("\n<color=#00FFFF>--- DEEP NETWORK TOPOLOGY ---</color>")
+        print(result)
+        print("<color=#00FFFF>-----------------------------</color>")
+    else
+        print("<color=red>Deep map failed to return data.</color>")
+    end if
+end function
+
+Jarvis.cmd_ssh = function(args)
+    if args.len < 4 then return print("<color=red>Usage: ssh <args>")
+    locShell = get_shell
+    res = locShell.connect_service(args[0],args[1].to_int,args[2],args[3])
+    if typeof(res) == "shell" then
+        print("<color=green>Valid Connection! Added to memory and Focused!")
+        self.track_object(res)
+        self.focusedIndex = self.objectsObtained.len - 1
+        self.focusedObject = self.objectsObtained[self.focusedIndex]
+    else  
+        print(res)
+    end if
+end function
+
+Jarvis.cmd_spearphish = function(args)
+    if args.len == 0 then return print("<color=red>Usage: spear [ip]</color>")
+    targetIP = args[0]
+    if not is_valid_ip(targetIP) then return print("<color=red>Invalid IP address.</color>")
+
+    router = get_router(targetIP)
+    if not router then return print("<color=red>Fatal: Could not reach router.</color>")
+    rNet = self.metax.net_use(targetIP, 0)
+    if not rNet then return print("<color=red>Fatal: Port 0 unreachable.</color>")
+    rLib = rNet.dump_lib
+    if not rLib then return print("<color=red>Fatal: Could not dump router library.</color>")
+    
+    p0 = self.get_p0(rLib, router, false) 
+    if p0.bounce == null then return print("<color=red>Failed to find/verify LAN Bounce exploit.</color>")
+    
+    // Resolve Domain
+    domain = "unknown.com"
+    whoData = whois(targetIP).split(char(10))
+    for line in whoData
+        if line.indexOf("Email address:") != null or line.indexOf("@") != null then
+            parts = line.split("@")
+            if parts.len > 1 then 
+                domain = parts[1].trim
+                break
+            end if
+        end if
+    end for
+    
+    // Delegate the heavy lifting to our helper
+    comps = self.sweep_lan(rLib, p0.bounce[0], p0.bounce[1], router)
+    
+    trustedSender = null 
+    discoveredTargets = {} 
+
+    // Process the captured computers for OSINT
+    for compObj in comps
+        lanIP = compObj.local_ip
+        homeDir = compObj.File("/home")
+        if not homeDir then continue
+        
+        discoveredTargets[lanIP] = []
+        for userFolder in homeDir.get_folders
+            if userFolder.name == "guest" then continue
+            
+            emailAddr = userFolder.name + "@" + domain
+            discoveredTargets[lanIP].push(emailAddr)
+            
+            // Hunt for Mail.txt passwords
+            if trustedSender == null then
+                mailTxt = compObj.File("/home/" + userFolder.name + "/Config/Mail.txt")
+                if mailTxt and mailTxt.has_permission("r") then
+                    lines = mailTxt.get_content.split(char(10))
+                    for line in lines
+                        if line.indexOf(":") != null then
+                            hash = line.split(":")[1].trim
+                            pass = self.crypto.decipher(hash)
+                            if pass then
+                                trustedSender = {"email": emailAddr, "pass": pass}
+                                break 
+                            end if
+                        end if
+                    end for
+                end if
+            end if
+        end for
+        
+        if discoveredTargets[lanIP].len == 0 then discoveredTargets.remove(lanIP)
+    end for
+
+    // --- OSINT REPORTING ---
+    if trustedSender != null then
+        print("\n<b><color=#42DB91>--- TRUSTED SENDER SECURED ---</color></b>")
+        print("<color=#00FFFF>SIGN IN AS:</color> <color=white>" + trustedSender.email + "</color>   <color=#1EFF00>" + trustedSender.pass + "</color>")
+    else
+        print("\n<color=#aaaaaa>No Mail.txt files found/cracked on the LAN to use as a Trusted Sender.</color>")
+    end if
+
+    print("\n<b><color=#B266FF>--- DISCOVERED TARGETS ---</color></b>")
+    if discoveredTargets.len > 0 then
+        for ip in discoveredTargets.indexes
+            print("<color=#aaaaaa>[" + ip + "]</color>")
+            for targetEmail in discoveredTargets[ip]
+                print("  |-- <color=white>" + targetEmail + "</color>")
+            end for
+        end for
+    else
+        print("<color=#aaaaaa>No user accounts discovered on the LAN.</color>")
+    end if
+
+    print(char(10))
+    self.rshell_db([])
+end function
+
+Jarvis.cmd_autohack = function(args)
+    if args.len == 0 then return print("<color=red>Usage: autohack [ip]</color>")
+    targetIP = args[0]
+    if not is_valid_ip(targetIP) then return print("<color=red>Invalid IP address.</color>")
+
+    print("\n<b><color=#FF5E00>--- INITIATING AUTOHACK V2 ON " + targetIP + " ---</color></b>")
+
+    router = get_router(targetIP)
+    if not router then return print("<color=red>Fatal: Could not reach router.</color>")
+
+    obtainedShell = null
+    bounceMem = ""
+    bounceVuln = ""
+    rLib = null 
+
+    // 1. FAST ROUTER CHECK (Port 0)
+    rNet = self.metax.net_use(targetIP, 0)
+    if rNet then rLib = rNet.dump_lib
+    if rLib then
+        p0 = self.get_p0(rLib, router) 
+        if p0.shell != null then
+            obtainedShell = p0.shell
+            print("<color=#84BD00>SUCCESS: Direct Router Shell obtained!</color>")
+        else if p0.bounce != null then
+            bounceMem = p0.bounce[0]
+            bounceVuln = p0.bounce[1]
+        end if
+    end if
+
+    // 2. ALL PORTS SCANNING (If Port 0 didn't yield a shell)
+    if obtainedShell == null then
+        portNums = [] 
+        for p in router.used_ports
+            if not p.is_closed then portNums.push(p.port_number)
+        end for
+        portNums.push(0) 
+
+        for pNum in portNums
+            netSesh = self.metax.net_use(targetIP, pNum)
+            if not netSesh then continue
+
+            mLib = netSesh.dump_lib
+            if not mLib then continue
+
+            exploitPairs = self.get_exploits(mLib)
+            for memadd in exploitPairs.indexes
+                for keyword in exploitPairs[memadd]
+                    res = mLib.overflow(memadd, keyword)
+                    if typeof(res) == "shell" then
+                        obtainedShell = res
+                        print("<color=#84BD00>SUCCESS: Shell obtained via Port " + pNum + "!</color>")
+                        break
+                    end if
+                end for
+                if obtainedShell != null then break
+            end for
+            if obtainedShell != null then break
+        end for
+    end if
+
+    // 3. PIVOT TO SPEARPHISH (If absolutely no shells were found)
+    if obtainedShell == null then
+        if bounceMem != "" and bounceVuln != "" and rLib != null then
+            self.cmd_spearphish([targetIP])
+            return 
+        else
+            return print("<color=red>Autohack failed. No shells and no LAN Bounce exploit available.</color>")
+        end if
+    end if
+
+    // 4. ROOT ESCALATION
+    self.track_object(obtainedShell)
+    self.focusedIndex = self.objectsObtained.len - 1
+    self.focusedObject = obtainedShell
+
+    hc = obtainedShell.host_computer
+    pubIP = hc.public_ip
+    crackedPass = ""
+
+    // Check DB first to save time
+    if self.rootNetworks.hasIndex(pubIP) then
+        crackedPass = self.rootNetworks[pubIP]
+        
+    else
+        passwdFile = hc.File("/etc/passwd")
+        if passwdFile and passwdFile.has_permission("r") then
+            for line in passwdFile.get_content.split(char(10))
+                if line.indexOf("root:") == 0 then
+                    hash = line.split(":")[1]
+                    if hash.len == 32 then
+                        
+                        crackedPass = self.crypto.decipher(hash)
+                    end if
+                    break
+                end if
+            end for
+        end if
+    end if
+
+    // 5. FINAL EXECUTION & CLEANUP
+    if crackedPass != "" and crackedPass != null then
+        print("<color=#84BD00>Hash cracked! Password: " + crackedPass + "</color>")
+        self.cmd_su([crackedPass]) 
+    else
+        self.cmd_su([]) 
+    end if
+
+    self.ghost_wipe()
+    self.cmd_drop(["clean"])
+
+    print("\n<b><color=#42DB91>--- AUTOHACK COMPLETE ---</color></b>")
+end function
+
+Jarvis.cmd_rpivot = function(args) //if we pass this a LAN IP we go into SNIPER MODE, if passed nothing we go into SWEEP
+    if args.len == 0 then return print("<color=red>Usage: rpivot [wan_ip] [optional: lan_ip]</color>")
+    
+    tIP = args[0]
+    targetLanIP = null
+    if args.len > 1 then targetLanIP = args[1]
+    
+    r = get_router(tIP)
+    if not r then return print("<color=red>Fatal: Router unreachable.</color>")
+    rNet = self.metax.net_use(tIP, 0)
+    if not rNet then return print("<color=red>Fatal: Port 0 unreachable.</color>")
+    rLib = rNet.dump_lib
+    if not rLib then return print("<color=red>Fatal: Could not dump router library.</color>")
+    
+    p0 = self.get_p0(rLib, r, false) 
+    if p0.bounce == null then return print("<color=red>Failed to find/verify LAN Bounce exploit.</color>")
+    bMem = p0.bounce[0]
+    bVuln = p0.bounce[1]
+
+    // --- SNIPER MODE ---
+    if targetLanIP != null then
+        print("\n<color=#00FFFF>Targeting specific LAN IP: " + targetLanIP + "...</color>")
+        cObj = rLib.overflow(bMem, bVuln, targetLanIP)
+        
+        if typeof(cObj) == "computer" then
+            self.track_object(cObj)
+            self.focusedIndex = self.objectsObtained.len - 1
+            self.focusedObject = cObj
+            print("<color=#84BD00>SUCCESS: Captured " + targetLanIP + " and set as Focus!</color>")
+        else
+            print("<color=red>Failed to capture " + targetLanIP + ". It may not exist or the bounce failed.</color>")
+        end if
+        
+    // --- SWEEP MODE ---
+    else
+        
+        
+        comps = self.sweep_lan(rLib, bMem, bVuln, r)
+        for cObj in comps
+            self.track_object(cObj)
+        end for
+
+        print("\n<b><color=#42DB91>--- R-PIVOT COMPLETE: " + comps.len + " Targets Captured ---</color></b>")
+    end if
+end function
+
+Jarvis.cmd_lle = function(args)
+    if not self.clone then
+        ui = user_input("<color=red>WARNING: You are NOT running as a clone. This will scan your local PC's libraries. Continue? (y/n) > </color>").trim.lower
+        if ui != "y" and ui != "yes" then return print("<color=orange>Aborted.</color>")
+    end if
+    
+    comp = get_shell.host_computer
+    libDir = comp.File("/lib")
+    
+    if not libDir or not libDir.has_permission("r") then
+        return print("<color=red>Error: Cannot read /lib directory. You may need elevated privileges.</color>")
+    end if
+    
+    libs = libDir.get_files
+    if libs.len == 0 then return print("<color=orange>No libraries found in /lib.</color>")
+    
+    for i in range(0, libs.len - 1)
+        libFile = libs[i]
+        print("\n<color=#aaaaaa>--- Scanning [" + (i+1) + "/" + libs.len + "]: " + libFile.name + " ---</color>")
+        
+        mLib = self.metax.load(libFile.path)
+        if typeof(mLib) != "MetaLib" then
+            print("<color=red>Failed to load MetaLib. Skipping...</color>")
+            continue
+        end if
+        
+        result = self.process_metaLib(mLib)
+        
+        if typeof(result) == "list" and result.len > 0 then
+            // Track the new objects
+            for o in result
+                self.track_object(o)
+            end for
+            
+            print("<color=green>Found <color=white>" + result.len + "</color> objects.</color>")
+            self.cmd_show_objs(["-" + result.len])
+            
+            ui = user_input("\n<color=yellow>Select ID to focus, [Enter] to scan next lib, or 'n' to abort > </color>").trim.lower
+            if ui == "n" then
+                print("<color=orange>LLE sequence aborted by user.</color>")
+                return
+            else if ui != "" then
+                self.cmd_focus([ui])
+                return 
+            end if
+        else if typeof(result) == "string" then
+            print("<color=#888888>" + result + "</color>")
+        end if
+    end for
+    
+    print("\n<color=#42DB91>Local Library Exploit (LLE) sequence completed.</color>")
+end function
+
+Jarvis.cmd_opendb = function(args)
+    dbs = [
+        {"name": "Exploits Library", "path": self.EXPLOITSLIBRARY},
+        {"name": "RShells Database", "path": self.RSHELLS_DB},
+        {"name": "Root Networks", "path": self.ROOTNETWORKS_DB},
+        {"name": "Bounce Cache", "path": self.BOUNCE_CACHE},
+        {"name": "Macro DB", "path": self.MACRO_DB},
+    ]
+    
+    print("\n<b><color=#B266FF>--- Jarvis Databases ---</color></b>")
+    for i in range(0, dbs.len - 1)
+        print("<color=purple>[" + i + "]</color> <color=white>" + dbs[i].name + "</color> <color=#888888>(" + dbs[i].path + ")</color>")
+    end for
+    
+    ui = user_input("\n<color=orange>Select a DB to open (or press Enter to cancel) > </color>").trim
+    if ui == "" then return print("<color=#aaaaaa>Cancelled.</color>")
+    
+    idx = ui.to_int
+    if typeof(idx) != "number" or idx < 0 or idx >= dbs.len then
+        return print("<color=red>Invalid selection.</color>")
+    end if
+    
+    targetPath = dbs[idx].path
+    comp = self.originalShell.host_computer
+    
+    plainText = ""
+    dbFile = comp.File(targetPath)
+    if dbFile then
+        raw = dbFile.get_content
+        if raw != "" then plainText = JarvisCrypt.decrypt(raw, self.MASTER_KEY)
+    else
+        print("<color=yellow>[!] File does not exist yet. Editor will open a blank buffer.</color>")
+    end if
+    
+    // Explicitly grab the local directory from the targetPath, ignoring the remote context
+    parts = targetPath.split("/")
+    parts.pop
+    tmpDir = parts.join("/")
+    if tmpDir == "" then tmpDir = "/"
+    
+    tmpName = ".jarvis_tmp_db.txt"
+    tmpPath = tmpDir + "/" + tmpName
+    
+    comp.touch(tmpDir, tmpName)
+    tmpFile = comp.File(tmpPath)
+    if not tmpFile then return print("<color=red>Error: Could not create temp decryption file in " + tmpDir + ".</color>")
+    
+    tmpFile.set_content(plainText)
+    print("<color=#84BD00>Launching editor for " + dbs[idx].name + " on origin host...</color>")
+    
+    err = self.originalShell.launch("/usr/bin/Notepad.exe", tmpPath)
+    if typeof(err) == "string" and err != "" then
+        self.originalShell.launch("/usr/bin/CodeEditor.exe", tmpPath)
+    end if
+    
+    user_input("\n<color=yellow>===> [ACTION REQUIRED] <===</color>\n<color=white>Modify the file in the GUI editor, save it, and close the editor.</color>\n<color=orange>Press Enter here when you are done to re-encrypt and save... </color>")
+    
+    newPlainText = tmpFile.get_content
+    encryptedText = JarvisCrypt.encrypt(newPlainText, self.MASTER_KEY)
+    
+    if not dbFile then
+        dbParts = targetPath.split("/")
+        fName = dbParts.pop
+        dPath = dbParts.join("/")
+        if dPath == "" then dPath = "/"
+        comp.touch(dPath, fName)
+        dbFile = comp.File(targetPath)
+    end if
+    
+    dbFile.set_content(encryptedText)
+    tmpFile.delete
+    
+    print("<color=#42DB91>Database updated, re-encrypted, and trace cleaned successfully.</color>")
+end function
+
+Jarvis.ghost_wipe = function()
+    for node in self.bounceChain
+        // Make sure the node actually has the shell key before trying to read it
+        if not node.hasIndex("shell") then continue
+        
+        obj = node.shell
+        if typeof(obj) != "shell" then continue
+        
+        comp = obj.host_computer
+        // Don't wipe your local machine
+        if comp.public_ip == self.originalShell.host_computer.public_ip then continue
+        
+        logFile = comp.File("/var/system.log")
+        if logFile and logFile.has_permission("w") then
+            
+            targetDir = ""
+            scanQueue = [comp.File("/")]
+            while scanQueue.len > 0
+                currentDir = scanQueue.pull
+                if currentDir != null and currentDir.has_permission("w") then 
+                    targetDir = currentDir.path
+                    break
+                end if
+                if currentDir != null then scanQueue = scanQueue + currentDir.get_folders
+            end while
+            
+            if targetDir != "" then
+                comp.touch(targetDir, "tmp_log.txt")
+                tmp = comp.File(targetDir + "/tmp_log.txt")
+                if tmp then tmp.move("/var", "system.log")
+            end if
+            
+        end if
+    end for
+end function
+
+Jarvis.cmd_nuke = function(args)
+    if typeof(self.focusedObject) != "shell" then
+        return print("<color=red>Requires shell focus to corrupt target.</color>")
+    end if
+
+    targetShell = self.focusedObject
+    comp = targetShell.host_computer
+
+    if not comp.File("/boot") or not comp.File("/boot").has_permission("w") then
+        return print("<color=red>Error: You must have root privileges to corrupt this machine.</color>")
+    end if
+
+    print("\n<color=orange>Initiating Scorched Earth protocol...</color>")
+
+    logFile = comp.File("/var/system.log")
+    if logFile and logFile.has_permission("w") then
+        logFile.set_content("")
+        print("<color=#aaaaaa>Logs scrubbed.</color>")
+    end if
+
+    print("<color=red>Deleting /boot...</color>")
+    comp.File("/boot").delete
+
+    idx = self.focusedIndex
+    if idx != null and idx != 0 then
+        self.objectsObtained.remove(idx)
+        self.metaList.remove(idx)
+    end if
+    
+    self.focusedIndex = 0
+    self.focusedObject = self.objectsObtained[0]
+    
+    print("<color=#84BD00>Target prepped and excised from memory.</color>")
+    
+    targetShell.launch("/usr/bin/Terminal.exe", "reboot")
+end function
+
+Jarvis.cmd_ps = function(args)
+    if typeof(self.focusedObject) != "shell" then return print("<color=red>Requires shell focus.</color>")
+    
+    print("\n<b><color=#00FFFF>--- RUNNING PROCESSES ---</color></b>")
+    print(self.focusedObject.host_computer.show_procs)
+end function
+
+Jarvis.cmd_kill = function(args)
+    if typeof(self.focusedObject) != "shell" then return print("<color=red>Requires shell focus.</color>")
+    if args.len == 0 then return print("<color=red>Usage: kill [PID]</color>")
+    
+    pid = args[0].to_int
+    if typeof(pid) != "number" then return print("<color=red>Invalid PID.</color>")
+    
+    res = self.focusedObject.host_computer.close_program(pid)
+    if res == 1 or res == true then
+        print("<color=#84BD00>Process " + pid + " terminated.</color>")
+    else
+        print("<color=red>Failed to terminate process " + pid + ". (Check privileges or if PID exists)</color>")
+    end if
+end function
+
+Jarvis.cmd_log = function(args)
+    if typeof(self.focusedObject) != "shell" then return print("<color=red>Requires shell focus.</color>")
+    
+    print("<color=#84BD00>Launching LogViewer...</color>")
+    self.focusedObject.launch("/usr/bin/LogViewer.exe")
+end function
+
+Jarvis.cmd_fe = function(args)
+    if typeof(self.focusedObject) != "shell" then return print("<color=red>Requires shell focus.</color>")
+    
+    print("<color=#84BD00>Launching FileExplorer...</color>")
+    self.focusedObject.launch("/usr/bin/FileExplorer.exe")
+end function
+
+Jarvis.cmd_reboot = function(args)
+    if typeof(self.focusedObject) != "shell" then return print("<color=red>Requires shell focus.</color>")
+    
+    print("<color=orange>Sending reboot signal to target...</color>")
+    err = self.focusedObject.launch("/usr/bin/reboot")
+    
+    if typeof(err) == "string" and err != "" then
+        print("<color=red>Reboot failed: " + err + "</color>")
+    else
+        print("<color=#84BD00>Target is rebooting. Connection severed.</color>")
+        
+        // Drop the dying shell from memory to prevent framework crashes
+        self.cmd_drop([str(self.focusedIndex)])
+    end if
+end function
+
+Jarvis.cmd_macro = function(args)
+    if args.len == 0 then return print("<color=red>Usage: macro [run/edit]</color>")
+    subCmd = args[0].lower
+    
+    comp = self.originalShell.host_computer
+    if subCmd == "edit" then
+        dbFile = comp.File(self.MACRO_DB)
+        plainText = ""
+        if dbFile and dbFile.get_content != "" then 
+            plainText = JarvisCrypt.decrypt(dbFile.get_content, self.MASTER_KEY)
+        else
+            plainText = "// Jarvis Boot Macro Configuration\n// Format: IP|PORT|USER|PASS\n// Example: 192.168.1.5|22|root|password123\n\n"
+        end if
+        
+        // Safely extract local directory from the absolute path string
+        parts = self.MACRO_DB.split("/")
+        parts.pop
+        tmpDir = parts.join("/")
+        if tmpDir == "" then tmpDir = "/"
+        
+        tmpName = ".jarvis_tmp_macro.txt"
+        tmpPath = tmpDir + "/" + tmpName
+        
+        comp.touch(tmpDir, tmpName)
+        tmpFile = comp.File(tmpPath)
+        if not tmpFile then return print("<color=red>Error: Could not create temp file in " + tmpDir + ".</color>")
+        
+        tmpFile.set_content(plainText)
+        print("<color=#84BD00>Launching editor for Macro DB on origin host...</color>")
+        
+        err = self.originalShell.launch("/usr/bin/Notepad.exe", tmpPath)
+        if typeof(err) == "string" and err != "" then
+            self.originalShell.launch("/usr/bin/CodeEditor.exe", tmpPath)
+        end if
+        
+        user_input("\n<color=yellow>===> [ACTION REQUIRED] <===</color>\n<color=white>Modify the connection list, save it, and close the editor.</color>\n<color=orange>Press Enter here when you are done to re-encrypt and save... </color>")
+        
+        newPlainText = tmpFile.get_content
+        encryptedText = JarvisCrypt.encrypt(newPlainText, self.MASTER_KEY)
+        
+        if not dbFile then
+            dbParts = self.MACRO_DB.split("/")
+            fName = dbParts.pop
+            dPath = dbParts.join("/")
+            if dPath == "" then dPath = "/"
+            comp.touch(dPath, fName)
+            dbFile = comp.File(self.MACRO_DB)
+        end if
+        
+        dbFile.set_content(encryptedText)
+        tmpFile.delete
+        print("<color=#42DB91>Macro Database updated and encrypted.</color>")
+        
+    else if subCmd == "run" then
+        dbFile = comp.File(self.MACRO_DB)
+        if not dbFile or dbFile.get_content == "" then return print("<color=red>Macro DB is empty. Run 'macro edit' first.</color>")
+        
+        plainText = JarvisCrypt.decrypt(dbFile.get_content, self.MASTER_KEY)
+        lines = plainText.split(char(10))
+        self.autoChain = []
+        
+        for line in lines
+            if line.trim == "" or line.indexOf("//") == 0 then continue
+            parts = line.split("\|")
+            if parts.len == 4 then
+                self.autoChain.push({"ip": parts[0].trim, "port": parts[1].trim, "user": parts[2].trim, "pass": parts[3].trim})
+            else
+                print("<color=orange>Skipping invalid line: " + line + "</color>")
+            end if
+        end for
+        
+        if self.autoChain.len > 0 then
+            print("<color=#00FFFF>Loaded " + self.autoChain.len + " nodes into Macro Chain. Initiating sequence...</color>")
+            self.process_macro()
+        else
+            print("<color=red>No valid connection nodes found in Macro DB.</color>")
+        end if
+    else
+        print("<color=red>Invalid option. Use 'run' or 'edit'.</color>")
+    end if
+end function
+
+
+
+
+Jarvis.dashboard = function() 	
+    fo = self.metaList[self.focusedIndex]
+    totalObj = self.objectsObtained.len
+    
+    origComp = self.originalShell.host_computer
+    locComp = get_shell.host_computer
+
+    print(char(10)*2)
+    
+    print("<align=center><b><color=#FF5E00>===============<color=#888888>[ </color><color=red>JARVIS OS</color><color=#888888> ]</color>===============</color></b></align>")
+    
+    print("  <b><color=#FF5E00>ORIGIN HOST</color></b><pos=25%><color=white>" + origComp.public_ip + "</color> <color=#888888>(" + origComp.local_ip + ") @ " + origComp.get_name + "</color>")
+    print("  <b><color=#FF5E00>LOCAL WHOAMI</color></b><pos=25%><color=white>" + locComp.public_ip + "</color> <color=#888888>(" + locComp.local_ip + ") @ " + locComp.get_name + "</color>")
+    
+    print("  <b><color=#FF5E00>CRYPTO ENGINE</color></b><pos=25%><color=#1EFF00>[ORIGIN]</color> <color=#aaaaaa>Max Cracking Speed</color>")
+    
+    // --- METAX PROXY STATUS ---
+    if self.clone then
+        print("  <b><color=#FF5E00>METAX ENGINE</color></b><pos=25%><color=#00FFFF>[PROXY ACTIVE]</color> <color=#aaaaaa>Executing from Clone. Origin IP is hidden.</color>")
+    else
+        print("  <b><color=#FF5E00>METAX ENGINE</color></b><pos=25%><color=#FF0000>[EXPOSED]</color> <color=#aaaaaa>Executing from Origin. Metax will leak local IP!</color>")
+    end if
+    
+    // --- TARGET LOGGING OPSEC ---
+    if fo.pubIP == origComp.public_ip or fo.pubIP == "" then
+        print("  <b><color=#FF5E00>OPSEC STATUS</color></b><pos=25%><color=#1EFF00>[SAFE]</color> <color=#aaaaaa>Local Focus. No active remote logging.</color>")
+    else
+        if self.clone then
+            print("  <b><color=#FF5E00>OPSEC STATUS</color></b><pos=25%><color=#FFFF00>[PROXY ACTIVE]</color> <color=#aaaaaa>Logs generated will point to the Clone's IP.</color>")
+        else
+            print("  <b><color=#FF5E00>OPSEC STATUS</color></b><pos=25%><color=#FF0000>[CRITICAL]</color> <color=#aaaaaa>Unproxied Remote Focus. Origin IP will be logged!</color>")
+        end if
+    end if
+    
+    if self.bounceChain.len > 0 then
+        print("\n  <b><color=#FF5E00>[::] UPLINK ROUTING MATRIX [::]</color></b>")
+        indent = ""
+        
+        for i in range(0, self.bounceChain.len - 1)
+            node = self.bounceChain[i]
+            
+            nodeColor = "<color=#00FFFF>" 
+            if node.type == "PROXY" then nodeColor = "<color=#FF0000>"
+            if node.type == "ORIGIN" then nodeColor = "<color=#aaaaaa>"
+            
+            activeTag = ""
+            if i == self.bounceChain.len - 1 then activeTag = " <color=#1EFF00><--[ ACTIVE ]</color>"
+            
+            prefix = indent
+            if i > 0 then 
+                prefix = indent + "<color=#555555>\-> </color>"
+                indent = indent + "  " 
+            end if
+            
+            // Fake hash removed, clean connection path presented
+            print("  " + prefix + "<b>" + nodeColor + "[" + node.type + "]</color></b> <color=white>" + node.pubIP + "</color> <color=#555555>(</color><color=#aaaaaa>" + node.lanIP + "</color><color=#555555>) @</color> <color=#F8AB7E>" + node.user + "</color>" + activeTag)
+            
+        end for
+    end if
+
+    print("\n  <b><size=115%><color=red>></color> <color=#FF5E00>FOCUS</color><pos=25%><u><color=#F8AB7E>" + fo.type.upper + "</color></u> <color=#888888>||</color> <color=white>" + fo.user + "</color> <color=#888888>||</color> " + fo.info + "</size></b>")
+    
+    print("<align=center><b><color=#FF5E00>===============<color=#888888>[ </color><color=#1EFF00>MEMORY: " + totalObj + "</color><color=#888888> ]</color>===============</color></b></align>")
+end function
+
+Jarvis.main = function()
+    commands = {
+        "nmap":   {"func": "run_nmap", "type": "Stealth", "cat": "Recon", "color": "#00FFFF", "usage": "nmap [ip]", "desc": "Passive port scan. Use -v for verbose (leaves logs)."},
+        "ls":     {"func": "cmd_ls", "type": "Stealth", "cat": "Recon", "color": "#00FFFF", "usage": "ls", "desc": "Visually explore target filesystem via ExplorOS."},
+        
+        "objs":   {"func": "cmd_show_objs_focus", "type": "Stealth", "cat": "Local", "color": "#B266FF", "usage": "objs", "desc": "List all targets stored in Jarvis's memory."},
+        "foc":    {"func": "cmd_focus", "type": "Stealth", "cat": "Local", "color": "#B266FF", "usage": "foc [id/me]", "desc": "Set active focus to an object ID or 'me'."},
+        "drop":   {"func": "cmd_drop", "type": "Stealth", "cat": "Local", "color": "#B266FF", "usage": "drop [all/clean/#]", "desc": "Remove memory objects (all, clean, or ID)."},
+        "dc":     {"func": "cmd_dc", "type": "Stealth", "cat": "Local", "color": "#B266FF", "usage": "dc [hash]", "desc": "Decipher an MD5 hash using the crypto engine."},
+        "opendb": {"func": "cmd_opendb", "type": "Stealth", "cat": "Local", "color": "#B266FF", "usage": "opendb", "desc": "Open a Jarvis database in the GUI text editor."},
+        
+        "sift":   {"func": "cmd_sift", "type": "Stealth", "cat": "Utility", "color": "#42DB91", "usage": "sift", "desc": "Read files for passwords/users without executing."},
+        "wlog":   {"func": "cmd_wlog", "type": "Stealth", "cat": "Utility", "color": "#42DB91", "usage": "wlog", "desc": "Wipe /var/system.log to clear your tracks."},
+        
+        "ps":     {"func": "cmd_ps", "type": "Stealth", "cat": "Utility", "color": "#42DB91", "usage": "ps", "desc": "List all running processes on the focused target."},
+        "kill":   {"func": "cmd_kill", "type": "Stealth", "cat": "Utility", "color": "#42DB91", "usage": "kill [pid]", "desc": "Terminate a specific process ID on the target."},
+        "log":    {"func": "cmd_log", "type": "Stealth", "cat": "Utility", "color": "#42DB91", "usage": "log", "desc": "Launch the GUI LogViewer.exe on the target."},
+        "fe":     {"func": "cmd_fe", "type": "Stealth", "cat": "Utility", "color": "#42DB91", "usage": "fe", "desc": "Launch the GUI FileExplorer.exe on the target."},
+        "reboot": {"func": "cmd_reboot", "type": "Aggro", "cat": "Destruct", "color": "#BD0000", "usage": "reboot", "desc": "Reboot target and safely drop connection to avoid crashes."},
+
+
+        "scan":     {"func": "cmd_scan", "type": "Aggro", "cat": "Recon", "color": "#FF5E00", "usage": "scan [ip] [port]", "desc": "Directly scan a target port for vulnerabilities."},
+        "deepmap":  {"func": "cmd_deepmap", "type": "Aggro", "cat": "Recon", "color": "#FF5E00", "usage": "deepmap [ip]", "desc": "Map nested network topology via RCE."},
+        "scanlan":  {"func": "cmd_scanlan", "type": "Aggro", "cat": "Recon", "color": "#FF5E00", "usage": "scanlan", "desc": "Upload & execute ScanLan.exe to find devices."},
+        "spear":    {"func": "cmd_spearphish", "type": "Aggro", "cat": "Recon", "color": "#FF5E00", "usage": "spear [ip]", "desc": "Subnet sweep & OSINT account crack."},
+        
+        "autohack": {"func": "cmd_autohack", "type": "Aggro", "cat": "Exploit", "color": "#FF0000", "usage": "autohack [ip]", "desc": "Zero-touch infiltration, escalation, and cleanup."},
+        "rpivot":   {"func": "cmd_rpivot", "type": "Aggro", "cat": "Exploit", "color": "#FF0000", "usage": "rpivot [wan] [lan]", "desc": "Cache LAN bounce exploits & capture LAN targets."},
+        "su":       {"func": "cmd_su", "type": "Aggro", "cat": "Exploit", "color": "#FF0000", "usage": "su [pass]", "desc": "Auto-bruteforce root, or elevate with a known pass."},
+        "proxy":    {"func": "cmd_proxy", "type": "Aggro", "cat": "Exploit", "color": "#FF0000", "usage": "proxy", "desc": "Spawn Jarvis proxy on target to mask your IP."},        
+        "lle":      {"func": "cmd_lle", "type": "Aggro", "cat": "Exploit", "color": "#FF0000", "usage": "lle", "desc": "Scan local libraries for exploits (Use on Proxy)."},
+        "ssh":      {"func": "cmd_ssh", "type": "Aggro", "cat": "Exploit", "color": "#FF0000", "usage": "ssh [args]", "desc": "Connect via SSH. Args: [ip] [port] [user] [pass]."},
+        "macro":    {"func": "cmd_macro", "type": "Aggro", "cat": "Exploit", "color": "#FF0000", "usage": "macro [run/edit]", "desc": "Automate a predefined SSH proxy chain."},
+
+        "rshell":   {"func": "cmd_rshell", "type": "Aggro", "cat": "Payload", "color": "#BD0000", "usage": "rshell [opt]", "desc": "R-shell server toolkit. opts: install/db/listen/queue"},
+        "troj":     {"func": "cmd_troj", "type": "Aggro", "cat": "Payload", "color": "#BD0000", "usage": "troj", "desc": "Deploy trojanized 'ps' to target."},
+        "wd":       {"func": "cmd_wd", "type": "Aggro", "cat": "Payload", "color": "#BD0000", "usage": "wd", "desc": "Deploy hidden log watchdog script."},
+        "launch":   {"func": "cmd_launch", "type": "Aggro", "cat": "Payload", "color": "#BD0000", "usage": "launch [path]", "desc": "Execute a specific binary on the target machine."},
+        "bash":     {"func": "cmd_bash", "type": "Aggro", "cat": "Payload", "color": "#BD0000", "usage": "bash", "desc": "Open standard terminal directly on target."},
+        
+        "nuke":     {"func": "cmd_nuke", "type": "Aggro", "cat": "Destruct", "color": "#BD0000", "usage": "nuke", "desc": "Scorched earth: Safely rm /boot and drop from memory."},
+    }
+    
+
+    groups = {
+        "Stealth": {
+            "label": "GHOST PROTOCOL (PASSIVE / LOCAL - NO LOGS)", 
+            "color": "#42DB91", 
+            "cats": ["Recon", "Local", "Utility"],
+        },
+        "Aggro": {
+            "label": "AGGRO PROTOCOL (ACTIVE EXPLOITATION - LEAVES LOGS)", 
+            "color": "#FF0000", 
+            "cats": ["Recon", "Exploit", "Payload", "Destruct"],
+        },
+    }
+
+    self.dashboard
+    print("\n<color=#aaaaaa>Type 'help' for a list of commands.</color>\n")
+
+    while true
+        self.ghost_wipe 
+       
+        if not self.clone then 
+            print("<color=#FF0000>[!] WARNING: ORIGIN IP EXPOSED - USE PROXY</color>")
+        else
+            print("<color=#1EFF00>[+] SECURE PROXY ACTIVE</color>")
+        end if
+        
+        ui = user_input("<color=#FF5E00>Jarvis > </color>",0,0,1).trim
+        if ui == "" then continue
+        
+        args = ui.split(" ")
+        cmd = args.pull.lower 
+
+        if cmd == "exit" or cmd == "quit" then
+            print("<color=red>Shutting down Jarvis...</color>")
+            break
+            
+        else if cmd == "help" or cmd == "?" then
+            for groupKey in groups.indexes
+                grp = groups[groupKey]
+                print("\n<b><size=110%><color=" + grp.color + ">[:: " + grp.label + " ::]</color></size></b>")
+                
+                for category in grp.cats
+                    print("\n  <color=#aaaaaa>--- " + category.upper() + " ---</color>")
+                    for cmdKey in commands.indexes
+                        cmdData = commands[cmdKey]
+                        if cmdData.type == groupKey and cmdData.cat == category then
+                            print("  <color=" + cmdData.color + ">" + cmdData.usage + "</color><pos=30%><indent=30%><color=#888888>- " + cmdData.desc + "</color></indent>")
+                        end if
+                    end for
+                end for
+            end for
+            
+            print("\n<b><size=110%><color=#FF5E00>[:: SYSTEM OVERRIDES ::]</color></size></b>")
+            print("  <color=red>dash</color><pos=30%><indent=30%><color=#888888>- Refresh dashboard (Target Focus & Memory info)</color></indent>")
+            print("  <color=red>help</color><pos=30%><indent=30%><color=#888888>- Show this menu</color></indent>")
+            print("  <color=red>exit</color><pos=30%><indent=30%><color=#888888>- Shut down Jarvis</color></indent>\n")
+            
+        else if cmd == "dash" or cmd == "dashboard" then
+            self.dashboard
+            
+        else if commands.hasIndex(cmd) then
+            funcName = commands[cmd].func
+            self[funcName](args) 
+        else
+            print("<color=red>Unknown command: " + cmd + "</color>")
+        end if
+    end while
+end function
+
+if params.len == 0 then
+    if get_custom_object.hasIndex("JarvisSaveSession") then
+        print("<color=orange>[!] Previous session detected. Restoring memory...</color>")
+        newinst = get_custom_object.JarvisSaveSession
+	else
+        newinst = new Jarvis
+        newinst.init
+    end if
+
+    get_custom_object.JarvisSaveSession = newinst
+    newinst.main
+end if
